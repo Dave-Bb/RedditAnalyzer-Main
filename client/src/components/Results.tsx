@@ -218,14 +218,22 @@ const Results: React.FC<ResultsProps> = ({
       });
 
       if (response.data.success) {
-        // Update the data with the new framework analysis
-        data.analysis.framework_analysis = response.data.framework_analysis;
+        // Create updated data with framework analysis
+        const updatedData = {
+          ...data,
+          analysis: {
+            ...data.analysis,
+            framework_analysis: response.data.framework_analysis
+          }
+        };
 
-        // Force a re-render by updating state instead of reloading
-        setData({...data, analysis: {...data.analysis, framework_analysis: response.data.framework_analysis}});
+        // Use the callback to update parent component instead of reloading
+        if (onReanalysisComplete) {
+          onReanalysisComplete(updatedData);
+        }
 
         alert('Framework analysis generated successfully!');
-        // Don't reload - the state update will re-render the component
+        // No reload needed - parent component will re-render with new data
       } else {
         alert('Failed to generate framework analysis: ' + (response.data.error || 'Unknown error'));
       }
