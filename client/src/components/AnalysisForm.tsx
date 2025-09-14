@@ -2,6 +2,9 @@ import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { AnalysisData } from '../types';
 
+// Simple hardcoded API URL for now
+const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+
 interface AnalysisFormProps {
   onAnalysisComplete: (data: AnalysisData) => void;
   onAnalysisStart: (analysisId?: string) => void;
@@ -51,23 +54,29 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({
   const checkApiStatus = async () => {
     try {
       setApiStatus(prev => ({ ...prev, checking: true }));
-      const response = await axios.get('http://localhost:3001/api/settings');
-      const { reddit, ai } = response.data;
+      
+      // Check localStorage for saved API keys (client-side only)
+      const redditKeys = localStorage.getItem('reddit_keys');
+      const claudeKeys = localStorage.getItem('claude_keys');
+      const openaiKeys = localStorage.getItem('openai_keys');
+      const preferredModel = localStorage.getItem('preferred_model') || 'claude';
 
-      const hasReddit = reddit.hasClientId && reddit.hasClientSecret;
-      const hasAi = ai.hasClaude || ai.hasOpenAI;
+      const hasReddit = !!redditKeys;
+      const hasClaude = !!claudeKeys;
+      const hasOpenAI = !!openaiKeys;
+      const hasAi = hasClaude || hasOpenAI;
 
       setApiStatus({
         reddit: hasReddit,
         ai: hasAi,
         checking: false,
-        hasClaude: ai.hasClaude,
-        hasOpenAI: ai.hasOpenAI,
-        preferredModel: ai.preferredModel || 'claude'
+        hasClaude: hasClaude,
+        hasOpenAI: hasOpenAI,
+        preferredModel: preferredModel
       });
 
       // Set initial selected model based on preference and availability
-      if (ai.preferredModel === 'openai' && ai.hasOpenAI) {
+      if (preferredModel === 'openai' && hasOpenAI) {
         setSelectedModel('openai');
       } else if (ai.hasClaude) {
         setSelectedModel('claude');
@@ -207,12 +216,23 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({
       // Get timeout from localStorage or use default
       const timeout = parseInt(localStorage.getItem('analysisTimeout') || '1800000'); // Default 30 minutes
 
-      const response = await axios.post('http://localhost:3001/api/analyze', {
+      // Get API keys from localStorage
+      const redditKeys = JSON.parse(localStorage.getItem('reddit_keys') || '{}');
+      const claudeKeys = JSON.parse(localStorage.getItem('claude_keys') || '{}');
+      const openaiKeys = JSON.parse(localStorage.getItem('openai_keys') || '{}');
+
+      const response = await axios.post(`${API_URL}/api/analyze`, {
         analysisId: tempAnalysisId,
         subreddits: subredditList,
         startDate,
         endDate,
-        postLimit
+        postLimit,
+        // Include API keys for the Worker to use
+        apiKeys: {
+          reddit: redditKeys,
+          claude: claudeKeys,
+          openai: openaiKeys
+        }
       }, {
         signal: controller.signal,
         timeout: timeout
