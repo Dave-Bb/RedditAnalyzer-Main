@@ -92,9 +92,9 @@ const Results: React.FC<ResultsProps> = ({
         date_range: data.summary.dateRange,
         total_posts: data.summary.totalPosts,
         total_comments: data.summary.totalComments,
-        overall_sentiment: data.analysis.overall_analysis.average_score,
-        dominant_themes: data.analysis.overall_analysis.dominant_themes,
-        key_emotions: data.analysis.overall_analysis.key_emotions
+        overall_sentiment: data.analysis.overall_sentiment?.average_score || 0,
+        dominant_themes: data.analysis.overall_sentiment?.dominant_themes || [],
+        key_emotions: data.analysis.overall_sentiment?.key_emotions || []
       },
       posts_sample: data.posts.slice(0, 20).map(post => ({
         id: post.id,
@@ -114,7 +114,7 @@ const Results: React.FC<ResultsProps> = ({
       sentiment_patterns: {
         by_subreddit: data.analysis.by_subreddit,
         timeline: data.analysis.timeline,
-        score_distribution: data.analysis.overall_analysis.sentiment_distribution
+        score_distribution: data.analysis.overall_sentiment?.sentiment_distribution || {}
       },
       high_engagement_posts: data.posts
         .filter(post => post.score > 100 || post.num_comments > 50)
@@ -441,7 +441,7 @@ const Results: React.FC<ResultsProps> = ({
               <div className="hero-metric-content">
                 <div className="hero-metric-value">
                   <AnimatedCounter
-                    value={data.analysis.overall_analysis.average_score}
+                    value={data.analysis.overall_sentiment?.average_score || 0}
                     decimals={2}
                     duration={1500}
                   />
@@ -449,11 +449,11 @@ const Results: React.FC<ResultsProps> = ({
                 <div className="hero-metric-label">Sentiment</div>
               </div>
               <div className={`hero-metric-trend ${
-                data.analysis.overall_analysis.average_score > 0.1 ? 'trend-positive' :
-                data.analysis.overall_analysis.average_score < -0.1 ? 'trend-negative' : ''
+                (data.analysis.overall_sentiment?.average_score || 0) > 0.1 ? 'trend-positive' :
+                (data.analysis.overall_sentiment?.average_score || 0) < -0.1 ? 'trend-negative' : ''
               }`}>
-                {data.analysis.overall_analysis.average_score > 0.1 ? '📈' :
-                 data.analysis.overall_analysis.average_score < -0.1 ? '📉' : '➡️'}
+                {(data.analysis.overall_sentiment?.average_score || 0) > 0.1 ? '📈' :
+                 (data.analysis.overall_sentiment?.average_score || 0) < -0.1 ? '📉' : '➡️'}
               </div>
             </div>
 
@@ -488,7 +488,7 @@ const Results: React.FC<ResultsProps> = ({
               <div className="hero-metric-content">
                 <div className="hero-metric-value">
                   <AnimatedCounter
-                    value={data.analysis.overall_analysis.dominant_themes.length}
+                    value={data.analysis.overall_sentiment?.dominant_themes?.length || 0}
                     duration={1000}
                   />
                 </div>
@@ -600,7 +600,7 @@ const Results: React.FC<ResultsProps> = ({
         <div className="results-main-content">
           <div className="analysis-summary">
             <h3>📝 Summary</h3>
-            <p>{data.analysis.overall_analysis.summary}</p>
+            <p>{data.analysis.summary || 'Analysis completed successfully.'}</p>
           </div>
 
           <div className="tabs">
@@ -676,7 +676,7 @@ const Results: React.FC<ResultsProps> = ({
                 <div className="card-icon">🏷️</div>
                 <h3 style={{margin: '0 0 1rem 0', color: '#333'}}>Dominant Themes</h3>
                 <div className="tag-cloud">
-                  {data.analysis.overall_analysis.dominant_themes.map((theme, index) => (
+                  {(data.analysis.overall_sentiment?.dominant_themes || []).map((theme, index) => (
                     <span key={index} className="theme-tag large">{theme}</span>
                   ))}
                 </div>
@@ -686,7 +686,7 @@ const Results: React.FC<ResultsProps> = ({
                 <div className="card-icon">😊</div>
                 <h3 style={{margin: '0 0 1rem 0', color: '#333'}}>Key Emotions</h3>
                 <div className="tag-cloud">
-                  {data.analysis.overall_analysis.key_emotions.map((emotion, index) => (
+                  {(data.analysis.overall_sentiment?.key_emotions || []).map((emotion, index) => (
                     <span key={index} className="emotion-tag">{emotion}</span>
                   ))}
                 </div>
@@ -694,8 +694,8 @@ const Results: React.FC<ResultsProps> = ({
             </div>
 
             <WordCloud
-              themes={data.analysis.overall_analysis.dominant_themes}
-              emotions={data.analysis.overall_analysis.key_emotions}
+              themes={data.analysis.overall_sentiment?.dominant_themes || []}
+              emotions={data.analysis.overall_sentiment?.key_emotions || []}
             />
           </div>
         )}
@@ -896,7 +896,7 @@ const Results: React.FC<ResultsProps> = ({
               <div className="sidebar-metric">
                 <div className="metric-icon">📊</div>
                 <div className="metric-info">
-                  <div className="metric-value">{data.analysis.overall_analysis.average_score.toFixed(3)}</div>
+                  <div className="metric-value">{(data.analysis.overall_sentiment?.average_score || 0).toFixed(3)}</div>
                   <div className="metric-label">Avg Sentiment</div>
                 </div>
               </div>
@@ -920,7 +920,7 @@ const Results: React.FC<ResultsProps> = ({
           <div className="sidebar-section">
             <h4>🏷️ Top Themes</h4>
             <div className="sidebar-themes">
-              {data.analysis.overall_analysis.dominant_themes.slice(0, 5).map((theme, index) => (
+              {(data.analysis.overall_sentiment?.dominant_themes || []).slice(0, 5).map((theme, index) => (
                 <div key={index} className="sidebar-theme">
                   <span className="theme-indicator">#{index + 1}</span>
                   <span className="theme-name">{theme}</span>
@@ -932,7 +932,7 @@ const Results: React.FC<ResultsProps> = ({
           <div className="sidebar-section">
             <h4>😊 Emotions</h4>
             <div className="sidebar-emotions">
-              {data.analysis.overall_analysis.key_emotions.slice(0, 5).map((emotion, index) => (
+              {(data.analysis.overall_sentiment?.key_emotions || []).slice(0, 5).map((emotion, index) => (
                 <span key={index} className="emotion-chip">{emotion}</span>
               ))}
             </div>

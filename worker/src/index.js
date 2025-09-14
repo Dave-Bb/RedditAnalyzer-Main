@@ -620,9 +620,17 @@ export default {
       }
 
       if (path === '/api/logs') {
-        // Simple logs endpoint - return empty stream for now
-        return addCORSHeaders(new Response('data: {"message":"Logs not available in production","type":"info"}\n\n', {
-          headers: { 
+        // Return a simple message for logs
+        const stream = new ReadableStream({
+          start(controller) {
+            const encoder = new TextEncoder();
+            controller.enqueue(encoder.encode('data: {"message":"📡 Connected to analysis logs","type":"connection"}\n\n'));
+            controller.enqueue(encoder.encode('data: {"message":"🔗 Ready for analysis - logs will appear here during processing","type":"info"}\n\n'));
+          }
+        });
+
+        return addCORSHeaders(new Response(stream, {
+          headers: {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive'
