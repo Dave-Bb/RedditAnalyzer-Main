@@ -179,8 +179,8 @@ const SyntheticPost: React.FC<SyntheticPostProps> = ({ data }) => {
   };
 
   const generateSimpleSyntheticPost = () => {
-    const themes = data.analysis.overall_analysis.dominant_themes;
-    const avgSentiment = data.analysis.overall_analysis.average_score;
+    const themes = data.analysis.overall_sentiment.dominant_themes;
+    const avgSentiment = data.analysis.overall_sentiment.average_score;
     const sentiment: 'positive' | 'negative' | 'neutral' = 
       avgSentiment > 0.1 ? 'positive' : avgSentiment < -0.1 ? 'negative' : 'neutral';
     

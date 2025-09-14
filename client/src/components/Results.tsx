@@ -600,7 +600,7 @@ const Results: React.FC<ResultsProps> = ({
         <div className="results-main-content">
           <div className="analysis-summary">
             <h3>📝 Summary</h3>
-            <p>{data.analysis.summary || 'Analysis completed successfully.'}</p>
+            <p>{data.analysis.overall_sentiment?.summary || 'Analysis completed successfully.'}</p>
           </div>
 
           <div className="tabs">

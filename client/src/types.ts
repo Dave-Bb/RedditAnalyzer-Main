@@ -36,7 +36,7 @@ export interface RedditComment {
 }
 
 export interface SentimentAnalysis {
-  overall_analysis: {
+  overall_sentiment: {
     average_score: number;
     sentiment_distribution: {
       positive: number;
