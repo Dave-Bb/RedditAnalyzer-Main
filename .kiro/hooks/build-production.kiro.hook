@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Build Production",
+  "description": "Build React app for deployment",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "client/package.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Execute the production build command 'npm run build' in the client directory to create optimized build files for deployment."
+  }
+}

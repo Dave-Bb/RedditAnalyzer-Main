@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { AnalysisData } from '../types';
+import { API_ENDPOINTS } from '../config';
 import SentimentChart from './SentimentChart';
 import TimelineChart from './TimelineChart';
 import SubredditComparison from './SubredditComparison';
@@ -11,6 +12,10 @@ import SyntheticPost from './SyntheticPost';
 
 interface ResultsProps {
   data: AnalysisData;
+  onReanalysisStart?: (analysisId?: string) => void;
+  onReanalysisComplete?: (data: AnalysisData) => void;
+  onReanalysisError?: (error: string) => void;
+  isReanalyzing?: boolean;
 }
 
 
@@ -57,7 +62,13 @@ const AnimatedCounter: React.FC<{ value: number; duration?: number; decimals?: n
   return <span>{prefix}{formatValue(count)}{suffix}</span>;
 };
 
-const Results: React.FC<ResultsProps> = ({ data }) => {
+const Results: React.FC<ResultsProps> = ({
+  data,
+  onReanalysisStart,
+  onReanalysisComplete,
+  onReanalysisError,
+  isReanalyzing = false
+}) => {
   const [activeTab, setActiveTab] = useState('insights');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveForm, setSaveForm] = useState({
@@ -68,6 +79,8 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingFramework, setIsGeneratingFramework] = useState(false);
   const [isRegeneratingInsights, setIsRegeneratingInsights] = useState(false);
+  const [apiStatus, setApiStatus] = useState({ hasClaude: false, hasOpenAI: false });
+  const [showModelSelector, setShowModelSelector] = useState(false);
 
   const generateCleanedData = (data: AnalysisData) => {
     return {
@@ -230,7 +243,7 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
     }
   };
 
-  const retryClaudeInsights = async () => {
+  const retryAIInsights = async () => {
     setIsRegeneratingInsights(true);
     try {
       const response = await axios.post('http://localhost:3001/api/regenerate-claude-insights', {
@@ -238,8 +251,8 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
       });
 
       if (response.data.success) {
-        // Update the data with the new claude insights
-        data.analysis.claude_insights = response.data.claude_insights;
+        // Update the data with the new AI insights
+        data.analysis.ai_insights = response.data.ai_insights;
         alert('Basic Subreddit Insights regenerated successfully! The page will refresh to show the results.');
         window.location.reload();
       } else {
@@ -266,13 +279,148 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
     }
   };
 
+  // Check API status on component mount
+  useEffect(() => {
+    const checkApiStatus = async () => {
+      try {
+        const response = await axios.get(API_ENDPOINTS.SETTINGS);
+        if (response.data.success) {
+          setApiStatus(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to check API status:', error);
+      }
+    };
+    checkApiStatus();
+  }, []);
+
+  const handleReanalyze = () => {
+    // Get user's preferred model from localStorage (same place Settings stores it)
+    let preferredModel = 'claude'; // default
+    try {
+      const savedFormData = localStorage.getItem('apiFormData');
+      if (savedFormData) {
+        const parsedData = JSON.parse(savedFormData);
+        // Check if there's a saved preferred model
+        if (parsedData.preferredModel) {
+          preferredModel = parsedData.preferredModel;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading preferred model from localStorage:', e);
+    }
+
+    console.log(`🎯 User's saved preference: "${preferredModel}"`);
+
+    if (preferredModel === 'claude' && apiStatus.hasClaude) {
+      startReanalysis('claude');
+    } else if (preferredModel === 'openai' && apiStatus.hasOpenAI) {
+      startReanalysis('openai');
+    } else if (apiStatus.hasClaude && apiStatus.hasOpenAI) {
+      // Only show selector if preferred model isn't available
+      setShowModelSelector(true);
+    } else {
+      // Fallback to whatever is available
+      const model = apiStatus.hasClaude ? 'claude' : 'openai';
+      startReanalysis(model);
+    }
+  };
+
+  const startReanalysis = (model: string) => {
+    const modelName = model === 'claude' ? 'Claude 3.5 Sonnet' : 'OpenAI GPT-4';
+
+    if (!window.confirm(`Reanalyze this data using ${modelName}? This will regenerate all AI insights.`)) {
+      setShowModelSelector(false);
+      return;
+    }
+
+    setShowModelSelector(false);
+
+    // Start performing reanalysis and notify parent with analysis ID
+    performReanalysisWithId(model);
+  };
+
+  const performReanalysisWithId = async (model: string) => {
+    // Call the parent's reanalysis start handler first
+    if (onReanalysisStart) {
+      onReanalysisStart();
+    }
+
+    await performReanalysis(model);
+  };
+
+  const performReanalysis = async (model: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    let analysisId: string | null = null;
+    try {
+      // Get API keys from localStorage (same place Settings stores them)
+      const savedFormData = localStorage.getItem('apiFormData');
+      let apiKeys = {};
+      if (savedFormData) {
+        try {
+          const parsedData = JSON.parse(savedFormData);
+          apiKeys = {
+            claudeApiKey: parsedData.claudeApiKey,
+            openaiApiKey: parsedData.openaiApiKey
+          };
+        } catch (e) {
+          console.error('Error parsing saved form data:', e);
+        }
+      }
+
+      const reanalysisRequest = {
+        posts: data.posts,
+        preferredModel: model,
+        ...apiKeys // Include the API keys from localStorage
+      };
+
+      const response = await axios.post(API_ENDPOINTS.REANALYZE_CURRENT, reanalysisRequest);
+
+      // Extract analysis ID from response if available
+      if (response.data.analysisId) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        analysisId = response.data.analysisId;
+      }
+
+      if (response.data.success) {
+        // Call the parent's completion handler
+        if (onReanalysisComplete) {
+          onReanalysisComplete({
+            ...data,
+            analysis: response.data.analysis
+          });
+        }
+      } else {
+        if (onReanalysisError) {
+          onReanalysisError('Failed to reanalyze: ' + (response.data.error || 'Unknown error'));
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to reanalyze:', error);
+      let errorMessage = 'Failed to reanalyze. ';
+
+      if (error.response) {
+        errorMessage += `Server error (${error.response.status}): ${error.response.data?.error || 'Unknown server error'}`;
+      } else if (error.request) {
+        errorMessage += 'Network error - unable to reach server.';
+      } else {
+        errorMessage += `Error: ${error.message}`;
+      }
+
+      if (onReanalysisError) {
+        onReanalysisError(errorMessage);
+      }
+    }
+  };
+
+
   return (
     <div className="results">
       {/* Hero Header */}
       <div className="hero-header">
         <div className="hero-left">
           <h2>📊 Analysis Results</h2>
-          <div className="analyzed-subreddits">
+          <div className="analyzed-subreddits" style={{textAlign: 'right'}}>
             <span className="subreddits-label">Analyzing:</span>
             <div className="subreddits-list">
               {data.summary.subreddits.map((subreddit, index) => (
@@ -358,6 +506,86 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
             <button onClick={exportCSV} className="export-btn">
               📊 CSV
             </button>
+            {!isReanalyzing ? (
+              <button
+                onClick={handleReanalyze}
+                className="reanalyze-btn"
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#9C27B0',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  boxShadow: '0 4px 12px rgba(156, 39, 176, 0.3)',
+                  transition: 'all 0.2s ease',
+                  marginLeft: '8px'
+                }}
+              >
+                🔄 Reanalyze with AI
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', marginLeft: '8px' }}>
+                <button
+                  disabled
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'not-allowed',
+                    fontSize: '16px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ⏳ Reanalyzing...
+                </button>
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Cancel the ongoing analysis? This will stop all AI API calls.')) {
+                      try {
+                        // Get active analyses and cancel them
+                        const activeResponse = await axios.get('http://localhost:3001/api/active-analyses');
+                        if (activeResponse.data.success && activeResponse.data.activeAnalyses.length > 0) {
+                          // Cancel the most recent analysis (likely the reanalysis we started)
+                          const mostRecent = activeResponse.data.activeAnalyses[0];
+                          await axios.post('http://localhost:3001/api/cancel-analysis', {
+                            analysisId: mostRecent.id
+                          });
+
+                          // Reset UI state
+                          if (onReanalysisError) {
+                            onReanalysisError('Analysis cancelled by user');
+                          }
+
+                          console.log('✅ Analysis cancelled successfully');
+                        }
+                      } catch (error) {
+                        console.error('Failed to cancel analysis:', error);
+                        alert('Failed to cancel analysis. Please try refreshing the page.');
+                      }
+                    }
+                  }}
+                  style={{
+                    padding: '12px 24px',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 12px rgba(244, 67, 54, 0.3)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  🛑 CANCEL
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -588,12 +816,12 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
                 </div>
               </details>
 
-              {data.analysis.claude_insights && (
+              {data.analysis.ai_insights && (
                 <div className="framework-section">
                   <h4>🤖 Basic Subreddit Insights</h4>
                   <div className="insights-grid">
-                    {Object.entries(data.analysis.claude_insights).map(([subreddit, insight]) => {
-                      const hasError = insight.includes('Unable to generate insights') || insight.includes('due to API error');
+                    {Object.entries(data.analysis.ai_insights).map(([subreddit, insight]) => {
+                      const hasError = (insight as string).includes('Unable to generate insights') || (insight as string).includes('due to API error');
 
                       return (
                         <div key={subreddit} className="insight-section">
@@ -601,11 +829,11 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
                           <div className="insight-content">
                             {hasError ? (
                               <div className="insight-error">
-                                <p className="error-message">{insight}</p>
+                                <p className="error-message">{insight as string}</p>
                                 <div className="retry-section">
                                   <button
                                     className="retry-insights-btn"
-                                    onClick={retryClaudeInsights}
+                                    onClick={retryAIInsights}
                                     disabled={isRegeneratingInsights}
                                   >
                                     {isRegeneratingInsights ? '🔄 Regenerating...' : '🔄 Retry Insights'}
@@ -613,7 +841,7 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
                                 </div>
                               </div>
                             ) : (
-                              insight.split('\n').map((paragraph, index) => (
+                              (insight as string).split('\n').map((paragraph, index) => (
                                 <p key={index}>{paragraph}</p>
                               ))
                             )}
@@ -644,6 +872,21 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
 
         {/* Sidebar (30% width) */}
         <div className="results-sidebar">
+          <div className="sidebar-section">
+            <h4>🤖 AI Agent</h4>
+            <div className="ai-agent-indicator">
+              <div className="agent-info">
+                <span className="agent-icon">
+                  {(data.aiModel || 'Unknown').includes('Claude') ? '🤖' :
+                   (data.aiModel || 'Unknown').includes('OpenAI') ? '🚀' : '❓'}
+                </span>
+                <span className="agent-name">
+                  Analysed by {data.aiModel || 'Unknown'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="sidebar-section">
             <h4>🎯 Key Metrics</h4>
             <div className="sidebar-metrics">
@@ -798,6 +1041,91 @@ const Results: React.FC<ResultsProps> = ({ data }) => {
                 className="save-confirm-btn"
               >
                 {isSaving ? 'Saving...' : 'Save Analysis'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showModelSelector && (
+        <div className="model-selector-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="model-selector-dialog" style={{
+            backgroundColor: 'white',
+            padding: '24px',
+            borderRadius: '8px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Choose AI Model for Reanalysis</h3>
+            <p style={{ color: '#666', marginBottom: '20px' }}>
+              Both Claude and OpenAI are available. Which model would you like to use to reanalyze this data?
+            </p>
+            <div className="model-options" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {apiStatus.hasClaude && (
+                <button
+                  onClick={() => startReanalysis('claude')}
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  🧠 Claude 3.5 Sonnet
+                </button>
+              )}
+              {apiStatus.hasOpenAI && (
+                <button
+                  onClick={() => startReanalysis('openai')}
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: '#2196F3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  🚀 OpenAI GPT-4
+                </button>
+              )}
+              <button
+                onClick={() => setShowModelSelector(false)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: 'transparent',
+                  color: '#666',
+                  border: '1px solid #ccc',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
               </button>
             </div>
           </div>

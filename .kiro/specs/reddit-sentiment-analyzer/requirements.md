@@ -12,7 +12,7 @@ The Reddit Sentiment Analyzer is a full-stack web application that enables users
 
 #### Acceptance Criteria
 
-1. WHEN a user enters multiple subreddit names THEN the system SHALL fetch posts from all specified subreddits in parallel
+1.  THEN the systeWHEN a user enters multiple subreddit namesm SHALL fetch posts from all specified subreddits in parallel
 2. WHEN fetching subreddit data THEN the system SHALL authenticate with Reddit API using OAuth 2.0
 3. WHEN processing multiple subreddits THEN the system SHALL handle individual subreddit failures gracefully without stopping the entire analysis
 4. WHEN a subreddit name is invalid THEN the system SHALL continue processing other valid subreddits and report the error

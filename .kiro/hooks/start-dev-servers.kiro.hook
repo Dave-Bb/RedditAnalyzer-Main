@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Start Dev Servers",
+  "description": "Start both frontend (3000) and backend (3001) servers",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "package.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Execute the command 'npm run dev' to start both the frontend and backend development servers. The frontend should run on port 3000 and the backend on port 3001."
+  }
+}

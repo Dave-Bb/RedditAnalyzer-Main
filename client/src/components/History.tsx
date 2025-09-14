@@ -33,10 +33,25 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
   const [filterTag, setFilterTag] = useState('');
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [generatingFrameworkId, setGeneratingFrameworkId] = useState<string | null>(null);
+  const [reanalyzingId, setReanalyzingId] = useState<string | null>(null);
+  const [apiStatus, setApiStatus] = useState({ hasClaude: false, hasOpenAI: false });
+  const [showModelSelector, setShowModelSelector] = useState<string | null>(null);
 
   useEffect(() => {
     loadAnalyses();
+    checkApiStatus();
   }, []);
+
+  const checkApiStatus = async () => {
+    try {
+      const response = await axios.get('http://localhost:3001/api/settings');
+      if (response.data.success) {
+        setApiStatus(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to check API status:', error);
+    }
+  };
 
   const loadAnalyses = async () => {
     try {
@@ -100,6 +115,40 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
       alert('Failed to generate framework analysis. Please try again.');
     } finally {
       setGeneratingFrameworkId(null);
+    }
+  };
+
+  const reanalyzeWithModel = async (id: string, name: string, model?: string) => {
+    if (!model && apiStatus.hasClaude && apiStatus.hasOpenAI) {
+      setShowModelSelector(id);
+      return;
+    }
+
+    const selectedModel = model || (apiStatus.hasClaude ? 'claude' : 'openai');
+    const modelName = selectedModel === 'claude' ? 'Claude 3.5 Sonnet' : 'OpenAI GPT-4';
+
+    if (!window.confirm(`Reanalyze "${name}" using ${modelName}? This will update the analysis results.`)) {
+      setShowModelSelector(null);
+      return;
+    }
+
+    setReanalyzingId(id);
+    setShowModelSelector(null);
+    try {
+      const response = await axios.post(`http://localhost:3001/api/analyses/${id}/reanalyze`, {
+        preferredModel: selectedModel
+      });
+      if (response.data.success) {
+        alert('Analysis updated successfully! The results now reflect the latest AI insights.');
+        loadAnalyses(); // Refresh the list
+      } else {
+        alert('Failed to reanalyze: ' + response.data.error);
+      }
+    } catch (error) {
+      console.error('Failed to reanalyze:', error);
+      alert('Failed to reanalyze. Please try again.');
+    } finally {
+      setReanalyzingId(null);
     }
   };
 
@@ -237,6 +286,23 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
                       {generatingFrameworkId === analysis.id ? '🔬...' : '🔬'}
                     </button>
                     <button
+                      onClick={() => reanalyzeWithModel(analysis.id, analysis.name)}
+                      disabled={reanalyzingId === analysis.id || (!apiStatus.hasClaude && !apiStatus.hasOpenAI)}
+                      className="reanalyze-btn"
+                      title="Reanalyze with current AI model"
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: '#9C27B0',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: reanalyzingId === analysis.id || (!apiStatus.hasClaude && !apiStatus.hasOpenAI) ? 'not-allowed' : 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      {reanalyzingId === analysis.id ? '🔄...' : '🔄'}
+                    </button>
+                    <button
                       onClick={() => deleteAnalysis(analysis.id, analysis.name)}
                       className="delete-btn"
                       title="Delete analysis"
@@ -329,6 +395,97 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
               <div className="no-results-icon">🔍</div>
               <h3>No Results Found</h3>
               <p>Try adjusting your search terms or filters</p>
+            </div>
+          )}
+
+          {showModelSelector && (
+            <div className="model-selector-overlay" style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}>
+              <div className="model-selector-dialog" style={{
+                backgroundColor: 'white',
+                padding: '24px',
+                borderRadius: '8px',
+                maxWidth: '400px',
+                width: '90%',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+              }}>
+                <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Choose AI Model</h3>
+                <p style={{ color: '#666', marginBottom: '20px' }}>
+                  Both Claude and OpenAI are available. Which model would you like to use for reanalysis?
+                </p>
+                <div className="model-options" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {apiStatus.hasClaude && (
+                    <button
+                      onClick={() => {
+                        const analysis = analyses.find(a => a.id === showModelSelector);
+                        if (analysis) reanalyzeWithModel(showModelSelector, analysis.name, 'claude');
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      🧠 Claude 3.5 Sonnet
+                    </button>
+                  )}
+                  {apiStatus.hasOpenAI && (
+                    <button
+                      onClick={() => {
+                        const analysis = analyses.find(a => a.id === showModelSelector);
+                        if (analysis) reanalyzeWithModel(showModelSelector, analysis.name, 'openai');
+                      }}
+                      style={{
+                        padding: '12px 16px',
+                        backgroundColor: '#2196F3',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      🚀 OpenAI GPT-4
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowModelSelector(null)}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: 'transparent',
+                      color: '#666',
+                      border: '1px solid #ccc',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </>

@@ -2,6 +2,28 @@
 
 A full-stack web application for analyzing sentiment trends from Reddit posts and comments using AI/ML APIs.
 
+## CRITICAL DEVELOPMENT GUIDELINES
+
+**BE HONEST, NOT SYCOPHANTIC:**
+- If something is impossible or you don't have the required information, SAY SO immediately
+- DO NOT implement broken code just because the user asked for it
+- DO NOT say "Fixed it!" or "Found the issue!" when you haven't actually verified it works
+- DO NOT act surprised when obviously broken implementations don't work
+- THINK before implementing: "Will this actually work? Do I have the required data/API access?"
+
+**Examples of what NOT to do:**
+- User asks for token counting → You implement variables that will always be 0 → User tests and wastes money
+- User asks for impossible feature → You say "sure!" → You write code you know won't work
+- Something breaks → You say "I see the issue! Fixed!" without actually understanding the problem
+
+**What TO do instead:**
+- "I can't implement token counting because the API responses don't include usage data"
+- "That feature would require X which we don't have access to"
+- "Let me check if this is actually possible before implementing it"
+
+**COST AWARENESS:**
+Every test costs real money. Don't waste the user's money on features you know are broken.
+
 ## Project Overview
 This is a React TypeScript frontend + Node.js Express backend application that:
 - Fetches Reddit data from specified subreddits
@@ -138,3 +160,74 @@ The app currently makes many individual API requests during analysis ("Making AP
 3. Run `npm run dev` to start both server and client
 4. Configure API keys via Settings page or .env file
 5. Test with small subreddit/date ranges first
+
+## WINDOWS SERVER MANAGEMENT - CRITICAL INSTRUCTIONS
+
+### Starting Servers
+**ALWAYS use this exact command:**
+```bash
+npm run dev
+```
+- This starts both server (port 3001) and client (port 3000) concurrently
+- DO NOT run server and client separately unless absolutely necessary
+- If ports are in use, see "Stopping Servers" section first
+
+### Stopping Servers
+**Method 1: Find and kill Node processes (RECOMMENDED)**
+```bash
+# Check what's using the ports
+netstat -ano | findstr :3001
+netstat -ano | findstr :3000
+
+# Kill specific processes (replace XXXXX with actual PID)
+taskkill /PID XXXXX /F
+taskkill /PID XXXXX /F
+```
+
+**Method 2: Kill all Node processes (NUCLEAR OPTION)**
+```bash
+taskkill /F /IM node.exe
+taskkill /F /IM "node.exe"
+```
+
+**Method 3: Use PowerShell**
+```powershell
+Get-Process node | Stop-Process -Force
+```
+
+### Troubleshooting Port Conflicts
+If you get "EADDRINUSE" errors:
+
+1. **Check what's using ports:**
+   ```bash
+   netstat -ano | findstr :3001
+   netstat -ano | findstr :3000
+   ```
+
+2. **Kill the processes:**
+   ```bash
+   taskkill /PID [PID_NUMBER] /F
+   ```
+
+3. **Then start fresh:**
+   ```bash
+   npm run dev
+   ```
+
+### Background Process Management in Claude Code
+- Claude Code may start background bash processes
+- Use `KillShell` tool to stop them properly
+- Check for multiple running processes with `BashOutput` tool
+- NEVER run multiple `npm run dev` commands simultaneously
+
+### Emergency Reset
+If everything is broken:
+1. `taskkill /F /IM node.exe` (kills all Node processes)
+2. `taskkill /F /IM "node.exe"` (backup command)
+3. Wait 5 seconds
+4. `npm run dev`
+
+### Port Usage
+- **Client**: http://localhost:3000
+- **Server**: http://localhost:3001
+- API calls from client go to `http://localhost:3001/api/*`

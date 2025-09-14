@@ -123,15 +123,17 @@ class RedditService {
     }
   }
 
-  async fetchSubredditData(subreddits, startDate, endDate, postLimit = 50) {
+  async fetchSubredditData(subreddits, startDate, endDate, postLimit = 50, progressCallback = null) {
     console.log(`Fetching posts from ${subreddits.length} subreddit(s) in parallel...`);
-    
-    // Fetch all subreddit posts in parallel
+
+    let completedSubreddits = 0;
+
+    // Fetch all subreddit posts in parallel with progress tracking
     const subredditPromises = subreddits.map(async (subreddit) => {
       try {
         console.log(`Fetching posts from r/${subreddit}...`);
         const posts = await this.fetchSubredditPosts(subreddit, postLimit);
-        
+
         // Filter posts by date range
         const filteredPosts = posts.filter(post => {
           const postDate = new Date(post.created_utc * 1000);
@@ -140,9 +142,27 @@ class RedditService {
           return postDate >= start && postDate <= end;
         });
 
+        // Update progress
+        completedSubreddits++;
+        if (progressCallback) {
+          progressCallback({
+            percentage: Math.floor((completedSubreddits / subreddits.length) * 50), // 0-50% for subreddit fetching
+            subredditsProcessed: completedSubreddits,
+            postsCollected: 0 // Will be updated later
+          });
+        }
+
         return { subreddit, posts: filteredPosts };
       } catch (error) {
         console.error(`Error processing subreddit r/${subreddit}:`, error.message);
+        completedSubreddits++;
+        if (progressCallback) {
+          progressCallback({
+            percentage: Math.floor((completedSubreddits / subreddits.length) * 50),
+            subredditsProcessed: completedSubreddits,
+            postsCollected: 0
+          });
+        }
         return { subreddit, posts: [] };
       }
     });
@@ -152,15 +172,24 @@ class RedditService {
 
     console.log(`Fetched ${allPosts.length} posts total. Now fetching comments in parallel...`);
 
+    // Update progress after fetching posts
+    if (progressCallback) {
+      progressCallback({
+        percentage: 50, // Posts fetched, now starting comments
+        subredditsProcessed: subreddits.length,
+        postsCollected: allPosts.length
+      });
+    }
+
     // Fetch comments for all posts in parallel with optimized concurrency
     const BATCH_SIZE = 10; // Increased from 5 to 10 for better speed
     const allPostsWithComments = [];
 
     for (let i = 0; i < allPosts.length; i += BATCH_SIZE) {
       const batch = allPosts.slice(i, i + BATCH_SIZE);
-      
+
       console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(allPosts.length/BATCH_SIZE)} (${batch.length} posts)`);
-      
+
       const batchPromises = batch.map(async (post) => {
         try {
           post.comments = await this.fetchPostComments(post.id, post.subreddit, 50); // Increased from 25 to 50
@@ -175,6 +204,16 @@ class RedditService {
       const batchResults = await Promise.all(batchPromises);
       allPostsWithComments.push(...batchResults);
 
+      // Update progress after each batch
+      if (progressCallback) {
+        const commentsProgress = Math.floor((allPostsWithComments.length / allPosts.length) * 50); // 50-100% for comments
+        progressCallback({
+          percentage: 50 + commentsProgress,
+          subredditsProcessed: subreddits.length,
+          postsCollected: allPostsWithComments.length
+        });
+      }
+
       // Minimal delay only for very large batches to avoid overwhelming Reddit
       if (i + BATCH_SIZE < allPosts.length && allPosts.length > 20) {
         await new Promise(resolve => setTimeout(resolve, 200)); // Reduced from 500ms to 200ms
@@ -182,6 +221,16 @@ class RedditService {
     }
 
     console.log(`Completed fetching comments for ${allPostsWithComments.length} posts`);
+
+    // Final progress update
+    if (progressCallback) {
+      progressCallback({
+        percentage: 100,
+        subredditsProcessed: subreddits.length,
+        postsCollected: allPostsWithComments.length
+      });
+    }
+
     return { posts: allPostsWithComments };
   }
 

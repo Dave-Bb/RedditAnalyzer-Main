@@ -2,20 +2,153 @@ const axios = require('axios');
 
 class SentimentService {
   constructor() {
-    this.claudeApiKey = process.env.CLAUDE_API_KEY?.trim();
-    this.openaiApiKey = process.env.OPENAI_API_KEY?.trim();
-    
-    // Debug logging
-    console.log('Claude API Key present:', !!this.claudeApiKey && this.claudeApiKey !== 'your_claude_api_key');
-    console.log('Claude API Key length:', this.claudeApiKey ? this.claudeApiKey.length : 'undefined');
-    console.log('Claude API Key starts with:', this.claudeApiKey ? this.claudeApiKey.substring(0, 10) : 'undefined');
-    console.log('OpenAI API Key present:', !!this.openaiApiKey && this.openaiApiKey !== 'your_openai_api_key');
+    this.usedModel = null; // Track which model was used in the last analysis
+  }
+
+  // Robust key loading that searches all sources and forces refresh
+  async loadAndValidateKeys(providedKeys = {}) {
+    console.log('🔍 Loading and validating API keys from all sources...');
+
+    // Debug: Show current environment state
+    console.log('🔍 Current process.env keys:', {
+      claude: process.env.CLAUDE_API_KEY ? `Present (${process.env.CLAUDE_API_KEY.length} chars)` : 'Missing',
+      openai: process.env.OPENAI_API_KEY ? `Present (${process.env.OPENAI_API_KEY.length} chars)` : 'Missing'
+    });
+
+    // 1. Start with provided keys (from web interface)
+    let claudeKey = providedKeys.claudeApiKey?.trim();
+    let openaiKey = providedKeys.openaiApiKey?.trim();
+
+    // 2. Fall back to environment variables if not provided via web
+    if (!claudeKey || claudeKey === 'your_claude_api_key') {
+      claudeKey = process.env.CLAUDE_API_KEY?.trim();
+      console.log('🔍 Claude key from env:', claudeKey ? `"${claudeKey}"` : 'null');
+      if (claudeKey && claudeKey !== 'your_claude_api_key') {
+        console.log('📁 Using Claude key from process.env');
+      }
+    } else {
+      console.log('🌐 Using Claude key from web settings');
+      // Update environment with web-provided key for consistency
+      process.env.CLAUDE_API_KEY = claudeKey;
+    }
+
+    if (!openaiKey || openaiKey === 'your_openai_api_key') {
+      openaiKey = process.env.OPENAI_API_KEY?.trim();
+      console.log('🔍 OpenAI key from env:', openaiKey ? `"${openaiKey}"` : 'null');
+      if (openaiKey && openaiKey !== 'your_openai_api_key') {
+        console.log('📁 Using OpenAI key from process.env');
+      }
+    } else {
+      console.log('🌐 Using OpenAI key from web settings');
+      // Update environment with web-provided key for consistency
+      process.env.OPENAI_API_KEY = openaiKey;
+    }
+
+    // 3. Validate what we found
+    const hasValidClaude = claudeKey && claudeKey !== 'your_claude_api_key';
+    const hasValidOpenAI = openaiKey && openaiKey !== 'your_openai_api_key';
+
+    console.log('🔑 Key validation results:', {
+      claude: hasValidClaude ? `Valid (${claudeKey.length} chars)` : 'Invalid/Missing',
+      openai: hasValidOpenAI ? `Valid (${openaiKey.length} chars)` : 'Invalid/Missing'
+    });
+
+    // 4. Test the keys that we found (like the test button does)
+    let claudeWorking = false;
+    let openaiWorking = false;
+
+    if (hasValidClaude) {
+      try {
+        const claudeTest = await this.testClaude();
+        claudeWorking = claudeTest.success;
+        console.log('✅ Claude key test:', claudeWorking ? 'PASSED' : 'FAILED');
+      } catch (error) {
+        console.log('❌ Claude key test failed:', error.message);
+      }
+    }
+
+    if (hasValidOpenAI) {
+      try {
+        const openaiTest = await this.testOpenAI();
+        openaiWorking = openaiTest.success;
+        console.log('✅ OpenAI key test:', openaiWorking ? 'PASSED' : `FAILED - ${openaiTest.message}`);
+      } catch (error) {
+        console.log('❌ OpenAI key test failed:', error.message);
+      }
+    }
+
+    return {
+      claudeKey: hasValidClaude ? claudeKey : null,
+      openaiKey: hasValidOpenAI ? openaiKey : null,
+      claudeWorking,
+      openaiWorking,
+      hasAnyWorkingKey: claudeWorking || openaiWorking
+    };
+  }
+
+  // Get fresh API keys from environment (not cached)
+  getClaudeApiKey() {
+    return process.env.CLAUDE_API_KEY?.trim();
+  }
+
+  getOpenAIApiKey() {
+    return process.env.OPENAI_API_KEY?.trim();
+  }
+
+  cleanTextForAnalysis(text) {
+    if (!text || typeof text !== 'string') return '';
+
+    return text
+      // Remove URLs (keep the content readable)
+      .replace(/https?:\/\/[^\s]+/g, '[URL]')
+      // Remove Reddit markdown links [text](url)
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      // Remove Reddit markup **bold** and *italic*
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      // Remove Reddit quote markup
+      .replace(/^>\s*/gm, '')
+      // Remove multiple spaces and normalize whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  shouldIncludeText(text, score = 0) {
+    if (!text || typeof text !== 'string') return false;
+
+    const cleanedText = text.trim();
+
+    // Skip very short or low-value comments
+    if (cleanedText.length < 5) return false;
+
+    // Skip deleted/removed content
+    if (cleanedText === '[deleted]' || cleanedText === '[removed]') return false;
+
+    // Skip emoji-only or single-word responses unless they have good scores
+    if (cleanedText.length < 15 && score < 5) {
+      // Allow if it contains actual words, not just emojis/punctuation
+      if (!/[a-zA-Z]{3,}/.test(cleanedText)) return false;
+    }
+
+    // Skip obvious spam or low-effort
+    const lowEffortPatterns = [
+      /^(lol|haha|lmao|this|yes|no|wtf|omg)\.?!?$/i,
+      /^[\d\s.,!?]+$/, // Just numbers and punctuation
+      /^[^\w\s]+$/ // Just symbols/emojis
+    ];
+
+    if (lowEffortPatterns.some(pattern => pattern.test(cleanedText))) {
+      return score >= 10; // Only include if highly upvoted
+    }
+
+    return true;
   }
 
   async analyzeWithClaude(texts) {
     try {
-      console.log('Making Claude API request with key length:', this.claudeApiKey.length);
-      
+      const claudeApiKey = this.getClaudeApiKey();
+      console.log('Making Claude API request with key length:', claudeApiKey?.length || 0);
+
       const response = await axios.post('https://api.anthropic.com/v1/messages', {
         model: 'claude-3-haiku-20240307',
         max_tokens: 4000,
@@ -44,7 +177,7 @@ Respond in JSON format:
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.claudeApiKey,
+          'x-api-key': claudeApiKey,
           'anthropic-version': '2023-06-01'
         }
       });
@@ -59,6 +192,7 @@ Respond in JSON format:
 
   async analyzeWithClaudeLarge(texts) {
     try {
+      const claudeApiKey = this.getClaudeApiKey();
       console.log(`Making optimized Claude API request for ${texts.length} texts`);
       
       // Use Claude 3.5 Sonnet for larger batches and better performance
@@ -95,7 +229,7 @@ Respond in this exact JSON format (no additional text):
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.claudeApiKey,
+          'x-api-key': claudeApiKey,
           'anthropic-version': '2023-06-01'
         }
       });
@@ -125,6 +259,7 @@ Respond in this exact JSON format (no additional text):
 
   async analyzeWithClaudeMaximized(texts, maxTextLength = 800) {
     try {
+      const claudeApiKey = this.getClaudeApiKey();
       console.log(`🚀 MAXIMIZED Claude request: ${texts.length} texts, ${maxTextLength} chars each`);
       
       const response = await axios.post('https://api.anthropic.com/v1/messages', {
@@ -163,7 +298,7 @@ JSON RESPONSE:
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.claudeApiKey,
+          'x-api-key': claudeApiKey,
           'anthropic-version': '2023-06-01',
           'anthropic-beta': 'max-tokens-3-5-sonnet-2024-07-15' // Enable 8K token output
         }
@@ -226,68 +361,86 @@ JSON RESPONSE:
     }
   }
 
-  async analyzeWithOpenAI(texts) {
+  async analyzeWithOpenAI(texts, maxTextLength = 300) {
     try {
+      const openaiApiKey = this.getOpenAIApiKey();
+      console.log(`Making OpenAI API request for ${texts.length} texts`);
+
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4',
         messages: [{
           role: 'user',
-          content: `Analyze the sentiment of these Reddit posts and comments. For each text, provide a sentiment score from -1 (very negative) to 1 (very positive), and classify as positive, negative, or neutral. Also identify key themes and emotions.
+          content: `Analyze sentiment for ${texts.length} Reddit texts. Score: -1 to +1, classify as positive/negative/neutral, identify themes.
 
-Texts to analyze:
-${texts.map((text, i) => `${i + 1}. ${text.substring(0, 500)}`).join('\n\n')}
+${texts.map((text, i) => `${i + 1}. ${text.substring(0, maxTextLength)}`).join('\n')}
 
-Respond in JSON format:
+JSON response:
 {
-  "individual_scores": [
-    {"index": 1, "score": 0.5, "sentiment": "positive", "confidence": 0.8, "themes": ["happiness", "satisfaction"]},
-    ...
-  ],
-  "overall_analysis": {
-    "average_score": 0.2,
-    "sentiment_distribution": {"positive": 40, "neutral": 35, "negative": 25},
-    "dominant_themes": ["theme1", "theme2"],
-    "key_emotions": ["emotion1", "emotion2"],
-    "summary": "Brief summary of overall sentiment trends"
-  }
+  "individual_scores": [{"index": 1, "score": 0.5, "sentiment": "positive", "confidence": 0.8, "themes": ["theme1", "theme2"]}],
+  "overall_analysis": {"average_score": 0.2, "sentiment_distribution": {"positive": 40, "neutral": 35, "negative": 25}, "dominant_themes": ["theme1", "theme2"], "key_emotions": ["emotion1", "emotion2"], "summary": "Brief summary"}
 }`
         }],
         max_tokens: 4000,
         temperature: 0.3
       }, {
         headers: {
-          'Authorization': `Bearer ${this.openaiApiKey}`,
+          'Authorization': `Bearer ${openaiApiKey}`,
           'Content-Type': 'application/json'
         }
       });
 
-      return JSON.parse(response.data.choices[0].message.content);
+      console.log(`OpenAI API processed ${texts.length} texts successfully`);
+
+      // Parse response with better error handling
+      const responseText = response.data.choices[0].message.content;
+      try {
+        return JSON.parse(responseText);
+      } catch (parseError) {
+        console.log('Raw OpenAI response:', responseText);
+
+        // Try to extract JSON from response if it has extra text
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          return JSON.parse(jsonMatch[0]);
+        }
+
+        throw new Error('OpenAI returned invalid JSON format');
+      }
     } catch (error) {
-      console.error('OpenAI API error:', error.response?.data || error.message);
-      throw new Error('Failed to analyze sentiment with OpenAI');
+      console.error('OpenAI API error details:', error.response?.status, error.response?.data || error.message);
+      throw new Error('Failed to analyze sentiment with OpenAI: ' + (error.response?.data?.error?.message || error.message));
     }
   }
 
-  async analyzeSentiment(redditData) {
+  async analyzeSentiment(redditData, options = null, abortSignal = null, progressCallback = null) {
     const texts = [];
     const textSources = [];
 
-    // Collect all texts (posts and comments)
+    // Collect all texts (posts and comments) with cleaning
     redditData.posts.forEach(post => {
       if (post.title && post.title.trim()) {
-        texts.push(post.title);
-        textSources.push({ type: 'post_title', postId: post.id, subreddit: post.subreddit });
+        const cleanTitle = this.cleanTextForAnalysis(post.title);
+        if (cleanTitle) {
+          texts.push(cleanTitle);
+          textSources.push({ type: 'post_title', postId: post.id, subreddit: post.subreddit, originalScore: post.score });
+        }
       }
-      
+
       if (post.selftext && post.selftext.trim()) {
-        texts.push(post.selftext);
-        textSources.push({ type: 'post_body', postId: post.id, subreddit: post.subreddit });
+        const cleanSelftext = this.cleanTextForAnalysis(post.selftext);
+        if (this.shouldIncludeText(cleanSelftext, post.score)) {
+          texts.push(cleanSelftext);
+          textSources.push({ type: 'post_body', postId: post.id, subreddit: post.subreddit, originalScore: post.score });
+        }
       }
 
       post.comments.forEach(comment => {
-        if (comment.body && comment.body.trim() && comment.body !== '[deleted]' && comment.body !== '[removed]') {
-          texts.push(comment.body);
-          textSources.push({ type: 'comment', postId: post.id, commentId: comment.id, subreddit: post.subreddit });
+        if (comment.body && this.shouldIncludeText(comment.body, comment.score)) {
+          const cleanComment = this.cleanTextForAnalysis(comment.body);
+          if (cleanComment) {
+            texts.push(cleanComment);
+            textSources.push({ type: 'comment', postId: post.id, commentId: comment.id, subreddit: post.subreddit, originalScore: comment.score });
+          }
         }
       });
     });
@@ -307,16 +460,54 @@ Respond in JSON format:
       };
     }
 
-    const hasClaudeKey = this.claudeApiKey && this.claudeApiKey !== 'your_claude_api_key';
-    const hasOpenAIKey = this.openaiApiKey && this.openaiApiKey !== 'your_openai_api_key';
-    
+    // Use fresh environment variables instead of cached constructor values
+    const currentClaudeKey = process.env.CLAUDE_API_KEY?.trim();
+    const currentOpenAIKey = process.env.OPENAI_API_KEY?.trim();
+
+    console.log('🔍 Analyzing sentiment with current env keys:', {
+      claudeKey: currentClaudeKey ? `Present (${currentClaudeKey.length} chars)` : 'Missing',
+      openaiKey: currentOpenAIKey ? `Present (${currentOpenAIKey.length} chars)` : 'Missing'
+    });
+
+    const hasClaudeKey = currentClaudeKey && currentClaudeKey !== 'your_claude_api_key';
+    const hasOpenAIKey = currentOpenAIKey && currentOpenAIKey !== 'your_openai_api_key';
+
+    console.log('🔍 Key validation results:', { hasClaudeKey, hasOpenAIKey });
+
     if (!hasClaudeKey && !hasOpenAIKey) {
       throw new Error('No valid AI API keys provided. Please check your .env file.');
     }
 
-    // Optimize Claude API with reasonable batches to avoid rate limits
-    const batchSize = hasClaudeKey ? 50 : 25; // Further reduced to prevent JSON truncation
-    const maxTextLength = hasClaudeKey ? 600 : 400; // Shorter text to fit more in context
+    // Determine which model to use based on preference and availability
+    const preferredModel = process.env.PREFERRED_MODEL || 'claude';
+    console.log(`🎯 User preference: "${preferredModel}", Available: Claude=${hasClaudeKey}, OpenAI=${hasOpenAIKey}`);
+
+    let useClaude, useOpenAI;
+
+    if (preferredModel === 'claude' && hasClaudeKey) {
+      useClaude = true;
+      useOpenAI = false;
+      console.log('🧠 DECISION: Using Claude (user preference + key available)');
+    } else if (preferredModel === 'openai' && hasOpenAIKey) {
+      useClaude = false;
+      useOpenAI = true;
+      console.log('🚀 DECISION: Using OpenAI (user preference + key available)');
+    } else {
+      // Fall back to whatever is available
+      useClaude = hasClaudeKey;
+      useOpenAI = !useClaude && hasOpenAIKey;
+      console.log(`⚠️ FALLBACK DECISION: Claude=${useClaude}, OpenAI=${useOpenAI} (preference "${preferredModel}" not available)`);
+    }
+
+    // Optimize API with reasonable batches to avoid rate limits
+    const batchSize = useClaude ? 50 : 15; // Smaller batches for OpenAI to avoid context limits
+    const maxTextLength = useClaude ? 600 : 300; // Shorter text for OpenAI to fit in context
+
+    console.log(`🤖 Using ${useClaude ? 'Claude 3.5 Sonnet' : 'OpenAI GPT-4'} for analysis (preferred: ${preferredModel})`);
+
+    // Track which model was used
+    this.usedModel = useClaude ? 'Claude 3.5 Sonnet' : 'OpenAI GPT-4';
+
     const batches = [];
     
     for (let i = 0; i < texts.length; i += batchSize) {
@@ -330,20 +521,53 @@ Respond in JSON format:
     console.log(`📝 Using ${maxTextLength} character limit per text for analysis`);
     
     let allResults = [];
-    
+
+    // Initial progress update
+    if (progressCallback) {
+      progressCallback({
+        percentage: 0,
+        itemsProcessed: 0,
+        partialResults: null
+      });
+    }
+
     // Process batches with maximum efficiency
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
+
+      // Check for abort signal
+      if (abortSignal?.aborted) {
+        console.log('⚠️ Sentiment analysis aborted by user');
+
+        // Return partial results if any
+        if (progressCallback && allResults.length > 0) {
+          progressCallback({
+            percentage: Math.floor((i / batches.length) * 100),
+            itemsProcessed: allResults.length,
+            partialResults: {
+              individual_scores: allResults,
+              processed: allResults.length,
+              total: texts.length
+            }
+          });
+        }
+
+        throw new Error('Analysis was aborted');
+      }
+
       try {
         console.log(`🧠 Processing batch ${i + 1}/${batches.length} (${batch.texts.length} items)...`);
         const batchStart = Date.now();
-        
+
         let batchResult;
-        if (hasClaudeKey) {
+        if (useClaude) {
+          // Keys are now fetched fresh in the function
           batchResult = await this.analyzeWithClaudeMaximized(batch.texts, maxTextLength);
         } else {
-          batchResult = await this.analyzeWithOpenAI(batch.texts);
+          // Keys are now fetched fresh in the function
+          batchResult = await this.analyzeWithOpenAI(batch.texts, maxTextLength);
         }
+
 
         // Add source information to results
         if (batchResult.individual_scores) {
@@ -354,13 +578,26 @@ Respond in JSON format:
           });
           allResults.push(...batchResult.individual_scores);
         }
-        
+
         const batchTime = Date.now() - batchStart;
         console.log(`✅ Batch ${i + 1} completed in ${(batchTime / 1000).toFixed(1)}s`);
-        
+
+        // Update progress after each batch
+        if (progressCallback) {
+          progressCallback({
+            percentage: Math.floor(((i + 1) / batches.length) * 100),
+            itemsProcessed: allResults.length,
+            partialResults: allResults.length > 0 ? {
+              individual_scores: allResults,
+              processed: allResults.length,
+              total: texts.length
+            } : null
+          });
+        }
+
         // Add delays to respect rate limits
         if (i < batches.length - 1) {
-          const delay = hasClaudeKey ? 1000 : 300; // 1 second for Claude, 300ms for OpenAI
+          const delay = useClaude ? 1000 : 4000; // 1 second for Claude, 4 seconds for OpenAI to avoid rate limits
           console.log(`⏳ Waiting ${delay}ms before next batch...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
@@ -373,8 +610,8 @@ Respond in JSON format:
     // Aggregate results
     const aggregatedResults = this.aggregateResults(allResults, redditData.posts);
     
-    // Add Claude's insights
-    aggregatedResults.claude_insights = await this.generateClaudeInsights(redditData.posts);
+    // Add AI insights
+    aggregatedResults.ai_insights = await this.generateAIInsights(redditData.posts);
     
     // Add framework analysis with delay to avoid rate limits
     try {
@@ -391,8 +628,24 @@ Respond in JSON format:
         error: 'Framework analysis failed: ' + error.message 
       };
     }
-    
+
+    // Set the used model on the aggregated results
+    aggregatedResults.aiModel = this.usedModel;
+
+    // Final progress update
+    if (progressCallback) {
+      progressCallback({
+        percentage: 100,
+        itemsProcessed: allResults.length,
+        partialResults: null
+      });
+    }
+
     return aggregatedResults;
+  }
+
+  getUsedModel() {
+    return this.usedModel;
   }
 
   aggregateResults(individualScores, posts) {
@@ -530,8 +783,22 @@ Respond in JSON format:
     return `The overall sentiment is ${sentiment} (${dominantSentiment} ${distribution[dominantSentiment]}%). ${topThemes ? `Key themes include: ${topThemes}.` : ''}`;
   }
 
-  async generateClaudeInsights(posts) {
+  async generateAIInsights(posts) {
     try {
+      // Use fresh API keys - try Claude first, fall back to OpenAI
+      const claudeApiKey = process.env.CLAUDE_API_KEY?.trim();
+      const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
+
+      const hasClaudeKey = claudeApiKey && claudeApiKey !== 'your_claude_api_key';
+      const hasOpenAIKey = openaiApiKey && openaiApiKey !== 'your_openai_api_key';
+
+      if (!hasClaudeKey && !hasOpenAIKey) {
+        return { error: 'No AI API keys available for insights generation' };
+      }
+
+      const useClaude = hasClaudeKey;
+      const useOpenAI = !useClaude && hasOpenAIKey;
+
       // Group posts by subreddit
       const postsBySubreddit = {};
       posts.forEach(post => {
@@ -546,7 +813,7 @@ Respond in JSON format:
       // Generate insights for each subreddit
       for (const [subreddit, subredditPosts] of Object.entries(postsBySubreddit)) {
         console.log(`Generating insights for r/${subreddit}...`);
-        
+
         // Create clean data for Claude
         const cleanData = subredditPosts.map(post => ({
           title: post.title,
@@ -563,7 +830,7 @@ Respond in JSON format:
             }))
         }));
 
-        const prompt = `Analyze the sentiment and themes of these posts from r/${subreddit} and give me your take. 
+        const prompt = `Analyze the sentiment and themes of these posts from r/${subreddit} and give me your take.
 
 Look for:
 - Overall community mood and attitudes
@@ -579,22 +846,44 @@ Data from r/${subreddit}:
 ${JSON.stringify(cleanData, null, 2)}`;
 
         try {
-          const response = await axios.post('https://api.anthropic.com/v1/messages', {
-            model: 'claude-3-haiku-20240307',
-            max_tokens: 1000,
-            messages: [{
-              role: 'user',
-              content: prompt
-            }]
-          }, {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': this.claudeApiKey,
-              'anthropic-version': '2023-06-01'
-            }
-          });
+          let response;
+          let insightText;
 
-          insights[subreddit] = response.data.content[0].text;
+          if (useClaude) {
+            response = await axios.post('https://api.anthropic.com/v1/messages', {
+              model: 'claude-3-haiku-20240307',
+              max_tokens: 1000,
+              messages: [{
+                role: 'user',
+                content: prompt
+              }]
+            }, {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': claudeApiKey,
+                'anthropic-version': '2023-06-01'
+              }
+            });
+            insightText = response.data.content[0].text;
+          } else if (useOpenAI) {
+            response = await axios.post('https://api.openai.com/v1/chat/completions', {
+              model: 'gpt-4',
+              messages: [{
+                role: 'user',
+                content: prompt
+              }],
+              max_tokens: 1000,
+              temperature: 0.3
+            }, {
+              headers: {
+                'Authorization': `Bearer ${openaiApiKey}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            insightText = response.data.choices[0].message.content;
+          }
+
+          insights[subreddit] = insightText;
           
           // Rate limiting between subreddits
           await new Promise(resolve => setTimeout(resolve, 2000));
@@ -613,9 +902,20 @@ ${JSON.stringify(cleanData, null, 2)}`;
 
   async generateFrameworkAnalysis(posts, basicAnalysis, retryCount = 0) {
     try {
-      if (!this.claudeApiKey || this.claudeApiKey === 'your_claude_api_key') {
-        return { error: 'Claude API key not available for framework analysis' };
+      // Use fresh API keys
+      const claudeApiKey = process.env.CLAUDE_API_KEY?.trim();
+      const openaiApiKey = process.env.OPENAI_API_KEY?.trim();
+
+      const hasClaudeKey = claudeApiKey && claudeApiKey !== 'your_claude_api_key';
+      const hasOpenAIKey = openaiApiKey && openaiApiKey !== 'your_openai_api_key';
+
+      if (!hasClaudeKey && !hasOpenAIKey) {
+        return { error: 'No AI API keys available for framework analysis' };
       }
+
+      // Prefer Claude but fall back to OpenAI
+      const useClaude = hasClaudeKey;
+      const useOpenAI = !useClaude && hasOpenAIKey;
 
       console.log('🔬 Generating advanced framework analysis...');
 
@@ -726,46 +1026,100 @@ ${JSON.stringify(cleanedData, null, 2)}
 
 Provide your analysis following the EXACT structure above, using the headers and formatting shown.`;
 
-      const response = await axios.post('https://api.anthropic.com/v1/messages', {
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 8000,
-        messages: [{
-          role: 'user',
-          content: frameworkPrompt
-        }]
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.claudeApiKey,
-          'anthropic-version': '2023-06-01'
-        }
-      });
+      let response;
+      let analysisText;
+
+      if (useClaude) {
+        console.log('🤖 Using Claude for framework analysis');
+        response = await axios.post('https://api.anthropic.com/v1/messages', {
+          model: 'claude-3-5-sonnet-20241022',
+          max_tokens: 8000,
+          messages: [{
+            role: 'user',
+            content: frameworkPrompt
+          }]
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': claudeApiKey,
+            'anthropic-version': '2023-06-01'
+          }
+        });
+        analysisText = response.data.content[0].text;
+      } else if (useOpenAI) {
+        console.log('🤖 Using OpenAI GPT-4 for framework analysis');
+
+        // Use shorter prompt for OpenAI due to context limits
+        const openaiFrameworkPrompt = `Analyze this Reddit community data and provide insights.
+
+**COMMUNITY ANALYSIS**
+• Community type and characteristics
+• Key behavioral patterns
+• Engagement trends
+
+**KEY FINDINGS**
+• Most interesting discoveries
+• Content that works/fails
+• Community dynamics
+
+**RECOMMENDATIONS**
+• Best posting strategies
+• Topics that resonate
+• Timing recommendations
+
+Data: ${JSON.stringify(cleanedData, null, 2).substring(0, 2000)}...
+
+Provide structured analysis following the format above.`;
+
+        response = await axios.post('https://api.openai.com/v1/chat/completions', {
+          model: 'gpt-4',
+          messages: [{
+            role: 'user',
+            content: openaiFrameworkPrompt
+          }],
+          max_tokens: 3000,
+          temperature: 0.3
+        }, {
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        analysisText = response.data.choices[0].message.content;
+      }
 
       return {
         success: true,
-        analysis: response.data.content[0].text,
-        generated_at: new Date().toISOString()
+        analysis: analysisText,
+        generated_at: new Date().toISOString(),
+        model_used: useClaude ? 'Claude 3.5 Sonnet' : 'OpenAI GPT-4'
       };
     } catch (error) {
       console.error('Error generating framework analysis:', error.message);
       
       const status = error.response?.status;
       const isRetryableError = status === 429 || status === 529 || status === 503 || status === 502 || status === 500;
-      
+
       // Retry logic for retryable errors
       if (isRetryableError && retryCount < 2) {
-        const delayMs = status === 529 ? (retryCount + 1) * 2000 : (retryCount + 1) * 5000; // Shorter delay for overloaded
-        console.log(`🔄 ${status === 529 ? 'Claude overloaded' : 'Rate limited'}, retrying in ${delayMs/1000}s... (attempt ${retryCount + 1}/3)`);
+        const delayMs = status === 529 ? (retryCount + 1) * 2000 : (retryCount + 1) * 5000;
+        const claudeApiKey = process.env.CLAUDE_API_KEY?.trim();
+        const hasClaudeKey = claudeApiKey && claudeApiKey !== 'your_claude_api_key';
+        const apiName = hasClaudeKey ? 'Claude' : 'OpenAI';
+        console.log(`🔄 ${apiName} ${status === 529 ? 'overloaded' : 'rate limited'}, retrying in ${delayMs/1000}s... (attempt ${retryCount + 1}/3)`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
         return this.generateFrameworkAnalysis(posts, basicAnalysis, retryCount + 1);
       }
-      
+
+      const claudeApiKey = process.env.CLAUDE_API_KEY?.trim();
+      const hasClaudeKey = claudeApiKey && claudeApiKey !== 'your_claude_api_key';
+      const apiName = hasClaudeKey ? 'Claude' : 'OpenAI';
       return {
         success: false,
-        error: status === 429 
-          ? 'Rate limited by Claude API. Please try again in a few minutes.'
+        error: status === 429
+          ? `Rate limited by ${apiName} API. Please try again in a few minutes.`
           : status === 529
-          ? 'Claude API is currently overloaded. Please try again in a few minutes.'
+          ? `${apiName} API is currently overloaded. Please try again in a few minutes.`
           : 'Failed to generate framework analysis: ' + error.message
       };
     }
@@ -828,7 +1182,12 @@ Provide your analysis following the EXACT structure above, using the headers and
 
   async testClaude() {
     try {
-      if (!this.claudeApiKey || this.claudeApiKey === 'your_claude_api_key') {
+      // Use fresh environment variable instead of cached value
+      const claudeApiKey = this.getClaudeApiKey();
+
+      console.log('🧪 testClaude sees key:', claudeApiKey ? `"${claudeApiKey}"` : 'null');
+
+      if (!claudeApiKey || claudeApiKey === 'your_claude_api_key') {
         return { success: false, message: 'Claude API key not set' };
       }
 
@@ -842,7 +1201,7 @@ Provide your analysis following the EXACT structure above, using the headers and
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.claudeApiKey,
+          'x-api-key': claudeApiKey,
           'anthropic-version': '2023-06-01'
         }
       });
@@ -862,7 +1221,10 @@ Provide your analysis following the EXACT structure above, using the headers and
 
   async testOpenAI() {
     try {
-      if (!this.openaiApiKey || this.openaiApiKey === 'your_openai_api_key') {
+      // Use fresh environment variable instead of cached value
+      const openaiApiKey = this.getOpenAIApiKey();
+
+      if (!openaiApiKey || openaiApiKey === 'your_openai_api_key') {
         return { success: false, message: 'OpenAI API key not set' };
       }
 
@@ -876,7 +1238,7 @@ Provide your analysis following the EXACT structure above, using the headers and
         temperature: 0
       }, {
         headers: {
-          'Authorization': `Bearer ${this.openaiApiKey}`,
+          'Authorization': `Bearer ${openaiApiKey}`,
           'Content-Type': 'application/json'
         }
       });
@@ -897,8 +1259,9 @@ Provide your analysis following the EXACT structure above, using the headers and
   async generateSyntheticPost(prompt, retryCount = 0) {
     const maxRetries = 3;
     const baseDelay = 1000; // 1 second
-    
+
     try {
+      const claudeApiKey = this.getClaudeApiKey();
       console.log(`🤖 Calling Claude for synthetic post generation (attempt ${retryCount + 1}/${maxRetries + 1})`);
       
       const response = await axios.post('https://api.anthropic.com/v1/messages', {
@@ -911,7 +1274,7 @@ Provide your analysis following the EXACT structure above, using the headers and
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.claudeApiKey,
+          'x-api-key': claudeApiKey,
           'anthropic-version': '2023-06-01'
         }
       });

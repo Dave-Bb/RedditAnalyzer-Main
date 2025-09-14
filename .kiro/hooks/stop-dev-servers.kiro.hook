@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Stop Dev Servers",
+  "description": "Kill all Node.js processes and free up ports",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "manual-trigger"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Execute the command: taskkill /F /IM node.exe to kill all Node.js processes and free up ports"
+  }
+}

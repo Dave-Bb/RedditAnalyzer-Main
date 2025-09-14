@@ -60,3 +60,6 @@ secrets.json
 # Cache
 .cache/
 .parcel-cache/
+
+# Video presentation script
+video_script.txt

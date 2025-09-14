@@ -10,6 +10,7 @@ interface SettingsData {
   ai: {
     hasClaude: boolean;
     hasOpenAI: boolean;
+    preferredModel: string;
   };
 }
 
@@ -35,21 +36,54 @@ const Settings: React.FC = () => {
     openaiApiKey: ''
   });
 
+  const [preferredModel, setPreferredModel] = useState<'claude' | 'openai'>('claude');
+  const [analysisTimeout, setAnalysisTimeout] = useState<number>(30); // Default 30 minutes
+  const [showCostWarningModal, setShowCostWarningModal] = useState(false);
+
   useEffect(() => {
     loadSettings();
   }, []);
+
+  const handleTimeoutChange = (value: number) => {
+    setAnalysisTimeout(value);
+    // Save to localStorage in milliseconds
+    localStorage.setItem('analysisTimeout', String(value * 60000));
+  };
 
   const loadSettings = async () => {
     try {
       const response = await axios.get('http://localhost:3001/api/settings');
       setSettings(response.data);
-      
-      // Pre-fill user agent
-      setFormData(prev => ({
-        ...prev,
-        redditUserAgent: response.data.reddit.userAgent
-      }));
-      
+
+      // Load persisted form data from localStorage, or use empty defaults
+      const savedFormData = localStorage.getItem('apiFormData');
+      if (savedFormData) {
+        try {
+          const parsedData = JSON.parse(savedFormData);
+          setFormData(prev => ({
+            ...prev,
+            ...parsedData,
+            redditUserAgent: response.data.reddit.userAgent // Always use server's user agent
+          }));
+        } catch (e) {
+          console.error('Error parsing saved form data:', e);
+        }
+      } else {
+        // Pre-fill user agent only
+        setFormData(prev => ({
+          ...prev,
+          redditUserAgent: response.data.reddit.userAgent
+        }));
+      }
+
+      setPreferredModel(response.data.ai.preferredModel || 'claude');
+
+      // Load saved timeout setting
+      const savedTimeout = localStorage.getItem('analysisTimeout');
+      if (savedTimeout) {
+        setAnalysisTimeout(parseInt(savedTimeout) / 60000); // Convert ms to minutes
+      }
+
       setIsLoading(false);
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -60,14 +94,20 @@ const Settings: React.FC = () => {
   const testApiKey = async (keyType: string) => {
     setTestingKey(keyType);
     try {
+      // First update the settings with current form values, then test
+      await axios.post('http://localhost:3001/api/update-settings', formData);
       const response = await axios.post('http://localhost:3001/api/test-keys', { keyType });
       setTestResults(prev => ({ ...prev, [keyType]: response.data }));
+
+      // Refresh settings display to show updated status (but don't reset form data)
+      const settingsResponse = await axios.get('http://localhost:3001/api/settings');
+      setSettings(settingsResponse.data);
     } catch (error: any) {
-      setTestResults(prev => ({ 
-        ...prev, 
-        [keyType]: { 
-          success: false, 
-          message: error.message || 'Test failed' 
+      setTestResults(prev => ({
+        ...prev,
+        [keyType]: {
+          success: false,
+          message: error.response?.data?.message || error.message || 'Test failed'
         }
       }));
     }
@@ -75,8 +115,17 @@ const Settings: React.FC = () => {
   };
 
   const updateSettings = async () => {
+    setShowCostWarningModal(true);
+  };
+
+  const confirmUpdateSettings = async () => {
+    setShowCostWarningModal(false);
+
     try {
-      const response = await axios.post('http://localhost:3001/api/update-settings', formData);
+      const response = await axios.post('http://localhost:3001/api/update-settings', {
+        ...formData,
+        preferredModel
+      });
       if (response.data.success) {
         alert('Settings updated! They will be active for this session.');
         loadSettings(); // Refresh settings display
@@ -87,8 +136,48 @@ const Settings: React.FC = () => {
     }
   };
 
+  const clearAllSettings = async () => {
+    if (window.confirm('Are you sure you want to clear all API keys? This will remove all current settings.')) {
+      const clearedData = {
+        redditClientId: '',
+        redditClientSecret: '',
+        redditUserAgent: 'RedditSentimentAnalyzer/1.0',
+        claudeApiKey: '',
+        openaiApiKey: ''
+      };
+
+      try {
+        const response = await axios.post('http://localhost:3001/api/update-settings', {
+          ...clearedData,
+          preferredModel: 'claude'
+        });
+
+        if (response.data.success) {
+          setFormData(clearedData);
+          setPreferredModel('claude');
+          setTestResults({});
+
+          // Clear localStorage as well
+          localStorage.removeItem('apiFormData');
+
+          loadSettings();
+          alert('All settings cleared successfully!');
+        }
+      } catch (error: any) {
+        alert('Failed to clear settings: ' + (error.response?.data?.error || error.message));
+      }
+    }
+  };
+
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    const newFormData = { ...formData, [field]: value };
+    setFormData(newFormData);
+
+    // Persist form data to localStorage (excluding empty values to save space)
+    const dataToSave = Object.fromEntries(
+      Object.entries(newFormData).filter(([, v]) => v.trim() !== '')
+    );
+    localStorage.setItem('apiFormData', JSON.stringify(dataToSave));
   };
 
   if (isLoading) {
@@ -98,7 +187,17 @@ const Settings: React.FC = () => {
   return (
     <div className="settings">
       <h2>API Configuration</h2>
-      
+
+      {/* Cost Warning */}
+      <div className="cost-warning">
+        <h3>⚠️ IMPORTANT: API Usage Costs</h3>
+        <p>
+          <strong>Using these API keys will incur costs from your AI providers (Claude/OpenAI).</strong>
+          Each analysis processes text through paid AI APIs. Costs vary based on the amount of data analyzed
+          (number of posts, comments, and text length). Please monitor your API usage and billing to avoid unexpected charges.
+        </p>
+      </div>
+
       <div className="settings-section">
         <h3>Current Status</h3>
         <div className="status-grid">
@@ -107,9 +206,9 @@ const Settings: React.FC = () => {
             <span className={`status-value ${settings?.reddit.hasClientId ? 'active' : 'inactive'}`}>
               {settings?.reddit.hasClientId ? '✅ Set' : '❌ Not Set'}
             </span>
-            <button 
+            <button
               onClick={() => testApiKey('reddit')}
-              disabled={!settings?.reddit.hasClientId || testingKey === 'reddit'}
+              disabled={testingKey === 'reddit'}
               className="test-button"
             >
               {testingKey === 'reddit' ? 'Testing...' : 'Test'}
@@ -128,9 +227,9 @@ const Settings: React.FC = () => {
             <span className={`status-value ${settings?.ai.hasClaude ? 'active' : 'inactive'}`}>
               {settings?.ai.hasClaude ? '✅ Active' : '❌ Not Set'}
             </span>
-            <button 
+            <button
               onClick={() => testApiKey('claude')}
-              disabled={!settings?.ai.hasClaude || testingKey === 'claude'}
+              disabled={testingKey === 'claude'}
               className="test-button"
             >
               {testingKey === 'claude' ? 'Testing...' : 'Test'}
@@ -142,9 +241,9 @@ const Settings: React.FC = () => {
             <span className={`status-value ${settings?.ai.hasOpenAI ? 'active' : 'inactive'}`}>
               {settings?.ai.hasOpenAI ? '✅ Active' : '❌ Not Set'}
             </span>
-            <button 
+            <button
               onClick={() => testApiKey('openai')}
-              disabled={!settings?.ai.hasOpenAI || testingKey === 'openai'}
+              disabled={testingKey === 'openai'}
               className="test-button"
             >
               {testingKey === 'openai' ? 'Testing...' : 'Test'}
@@ -164,6 +263,104 @@ const Settings: React.FC = () => {
             ))}
           </div>
         )}
+
+        {/* Model Selection */}
+        {settings?.ai.hasClaude && settings?.ai.hasOpenAI && (
+          <div className="model-selection">
+            <h4>AI Model Preference</h4>
+            <p>Both Claude and OpenAI are configured. Choose your preferred model:</p>
+            <div className="model-options">
+              <label className="model-option">
+                <input
+                  type="radio"
+                  name="preferredModel"
+                  value="claude"
+                  checked={preferredModel === 'claude'}
+                  onChange={async (e) => {
+                    const newModel = e.target.value as 'claude';
+                    setPreferredModel(newModel);
+
+                    // Update localStorage immediately
+                    const dataToSave = { ...formData, preferredModel: newModel };
+                    const filteredData = Object.fromEntries(
+                      Object.entries(dataToSave).filter(([, v]) => v && v.toString().trim() !== '')
+                    );
+                    localStorage.setItem('apiFormData', JSON.stringify(filteredData));
+
+                    // Auto-save preference to server immediately
+                    try {
+                      await axios.post('http://localhost:3001/api/update-settings', {
+                        ...formData,
+                        preferredModel: newModel
+                      });
+                      console.log('✅ Auto-saved Claude preference to both localStorage and server');
+                    } catch (error) {
+                      console.error('Failed to save Claude preference:', error);
+                    }
+                  }}
+                />
+                <div className="model-info">
+                  <div className="model-name">🤖 Claude 3.5 Sonnet</div>
+                  <div className="model-description">Advanced reasoning, larger context, better JSON parsing</div>
+                </div>
+              </label>
+              <label className="model-option">
+                <input
+                  type="radio"
+                  name="preferredModel"
+                  value="openai"
+                  checked={preferredModel === 'openai'}
+                  onChange={async (e) => {
+                    const newModel = e.target.value as 'openai';
+                    setPreferredModel(newModel);
+
+                    // Update localStorage immediately
+                    const dataToSave = { ...formData, preferredModel: newModel };
+                    const filteredData = Object.fromEntries(
+                      Object.entries(dataToSave).filter(([, v]) => v && v.toString().trim() !== '')
+                    );
+                    localStorage.setItem('apiFormData', JSON.stringify(filteredData));
+
+                    // Auto-save preference to server immediately
+                    try {
+                      await axios.post('http://localhost:3001/api/update-settings', {
+                        ...formData,
+                        preferredModel: newModel
+                      });
+                      console.log('✅ Auto-saved OpenAI preference to both localStorage and server');
+                    } catch (error) {
+                      console.error('Failed to save OpenAI preference:', error);
+                    }
+                  }}
+                />
+                <div className="model-info">
+                  <div className="model-name">🚀 OpenAI GPT-4</div>
+                  <div className="model-description">Fast processing, good general performance</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* Timeout Configuration */}
+        <div className="timeout-configuration">
+          <h4>⏱️ Analysis Timeout</h4>
+          <p>Set the maximum time allowed for analysis before timeout (in minutes):</p>
+          <div className="timeout-input-group">
+            <input
+              type="number"
+              min="5"
+              max="120"
+              value={analysisTimeout}
+              onChange={(e) => handleTimeoutChange(parseInt(e.target.value) || 30)}
+              className="timeout-input"
+            />
+            <span className="timeout-label">minutes</span>
+          </div>
+          <div className="timeout-info">
+            <small>Default: 30 minutes | Recommended: 30-60 minutes for large analyses</small>
+          </div>
+        </div>
       </div>
 
       <div className="settings-section">
@@ -233,12 +430,20 @@ const Settings: React.FC = () => {
               Show API Keys
             </label>
 
-            <button 
-              onClick={updateSettings}
-              className="update-button"
-            >
-              Update Settings
-            </button>
+            <div className="settings-buttons">
+              <button
+                onClick={updateSettings}
+                className="update-button"
+              >
+                Update Settings
+              </button>
+              <button
+                onClick={clearAllSettings}
+                className="clear-button"
+              >
+                Clear All Settings
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -277,6 +482,51 @@ const Settings: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Cost Warning Confirmation Modal */}
+      {showCostWarningModal && (
+        <div className="modal-overlay">
+          <div className="modal-content cost-warning-modal">
+            <div className="modal-header">
+              <h3>⚠️ API Cost Warning</h3>
+              <button
+                className="modal-close"
+                onClick={() => setShowCostWarningModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="warning-content">
+                <p><strong>These API keys will be used for analysis requests that incur costs from Claude/OpenAI.</strong></p>
+
+                <p>Costs depend on the amount of text analyzed:</p>
+                <ul>
+                  <li>Number of posts and comments processed</li>
+                  <li>Length of text content</li>
+                  <li>AI model used (Claude vs OpenAI)</li>
+                </ul>
+
+                <p><strong>Please monitor your API provider billing to avoid unexpected charges.</strong></p>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="cancel-button"
+                onClick={() => setShowCostWarningModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="confirm-button"
+                onClick={confirmUpdateSettings}
+              >
+                I Understand - Update Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

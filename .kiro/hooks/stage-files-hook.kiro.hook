@@ -1,0 +1,22 @@
+{
+  "enabled": true,
+  "name": "Stage Files with Message",
+  "description": "Automatically stages modified files with a commit message but does not commit them, allowing for review before final commit",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "client/src/**/*.*",
+      "server/**/*.*",
+      "*.js",
+      "*.json",
+      "*.md",
+      "*.ts",
+      "*.tsx"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Stage all modified files and prepare a descriptive commit message based on the changes made. Use git add to stage the files and git commit --dry-run or similar to show what would be committed, but do not actually commit the changes. The user wants to review before committing."
+  }
+}

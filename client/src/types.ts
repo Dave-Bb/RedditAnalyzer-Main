@@ -10,6 +10,7 @@ export interface AnalysisData {
       endDate: string;
     };
   };
+  aiModel?: string; // Track which AI model was used for the analysis
 }
 
 export interface RedditPost {
@@ -58,7 +59,7 @@ export interface SentimentAnalysis {
     };
   };
   timeline: TimelineData[];
-  claude_insights?: {
+  ai_insights?: {
     [subreddit: string]: string;
   };
   framework_analysis?: {
