@@ -123,7 +123,7 @@ const Settings: React.FC = () => {
     setShowCostWarningModal(false);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/update-settings`, {
+      const response = await axios.post(API_ENDPOINTS.UPDATE_SETTINGS, {
         ...formData,
         preferredModel
       });
@@ -148,7 +148,7 @@ const Settings: React.FC = () => {
       };
 
       try {
-        const response = await axios.post(`${API_BASE_URL}/api/update-settings`, {
+        const response = await axios.post(API_ENDPOINTS.UPDATE_SETTINGS, {
           ...clearedData,
           preferredModel: 'claude'
         });
