@@ -87,30 +87,45 @@ class RedditService {
         }
 
         const data = await response.json();
+        console.log(`🔥 Raw Reddit response for r/${subreddit}:`, data.data?.children?.length || 0, 'posts');
 
         for (const post of data.data.children) {
           const postData = post.data;
+          console.log(`🔥 Processing post: ${postData.title?.substring(0, 50)}...`);
 
-          // Filter by date if provided
+          // Filter by date if provided - make date filtering less restrictive
           const postDate = new Date(postData.created_utc * 1000);
-          if (startDate && postDate < new Date(startDate)) continue;
-          if (endDate && postDate > new Date(endDate)) continue;
+          console.log(`🔥 Post date: ${postDate.toISOString()}, Start: ${startDate}, End: ${endDate}`);
+
+          if (startDate && postDate < new Date(startDate)) {
+            console.log(`🔥 Skipping post - too old`);
+            continue;
+          }
+          if (endDate && postDate > new Date(endDate)) {
+            console.log(`🔥 Skipping post - too new`);
+            continue;
+          }
 
           // Fetch comments for this post
           const comments = await this.fetchPostComments(subreddit, postData.id, accessToken);
+          console.log(`🔥 Fetched ${comments.length} comments for post ${postData.id}`);
 
+          // Map to structure that matches your TypeScript interface
           posts.push({
             id: postData.id,
             title: postData.title,
-            body: postData.selftext || '',
+            selftext: postData.selftext || '', // Use 'selftext' not 'body'
             author: postData.author,
             score: postData.score,
-            upvoteRatio: postData.upvote_ratio,
+            num_comments: postData.num_comments, // Add this
+            created_utc: postData.created_utc, // Keep as timestamp
             subreddit: postData.subreddit,
-            created: postDate.toISOString(),
+            permalink: postData.permalink, // Add this
             url: postData.url,
             comments: comments,
           });
+
+          console.log(`🔥 Added post to results. Total posts now: ${posts.length}`);
         }
       } catch (error) {
         console.error(`Error fetching r/${subreddit}:`, error);
@@ -144,12 +159,13 @@ class RedditService {
               author: comment.data.author,
               body: comment.data.body,
               score: comment.data.score,
-              created: new Date(comment.data.created_utc * 1000).toISOString(),
+              created_utc: comment.data.created_utc, // Keep as timestamp like posts
             });
           }
         }
       }
 
+      console.log(`🔥 Returning ${comments.length} comments for post ${postId}`);
       return comments;
     } catch (error) {
       console.error(`Error fetching comments for ${postId}:`, error);
@@ -540,11 +556,13 @@ export default {
         const { subreddits, startDate, endDate, postLimit = 50, apiKeys } = requestData;
 
         console.log('🔥 ANALYZE ENDPOINT HIT!');
+        console.log('🔥 Request params:', { subreddits, startDate, endDate, postLimit });
         console.log('🔥 API Keys provided:', {
           reddit: !!apiKeys?.reddit?.redditClientId,
           claude: !!apiKeys?.claude?.claudeApiKey,
           openai: !!apiKeys?.openai?.openaiApiKey
         });
+        console.log('🔥 Full apiKeys structure:', JSON.stringify(apiKeys, null, 2));
 
         try {
           // Create services with provided API keys
