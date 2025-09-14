@@ -200,7 +200,7 @@ const SyntheticPost: React.FC<SyntheticPostProps> = ({ data }) => {
     };
     
     // Generate simple comments
-    const vocabulary = extractVocabulary(data.posts);
+    const vocabulary = extractVocabulary(data.posts || []);
     const numComments = Math.floor(Math.random() * 5) + 3;
     for (let i = 0; i < numComments; i++) {
       post.comments.push(generateComment(vocabulary, sentiment, 0, []));
@@ -228,8 +228,8 @@ const SyntheticPost: React.FC<SyntheticPostProps> = ({ data }) => {
     
     setIsGenerating(true);
     setTimeout(() => {
-      const vocabulary = extractVocabulary(data.posts);
-      const realComments = data.posts.flatMap(p => p.comments || []);
+      const vocabulary = extractVocabulary(data.posts || []);
+      const realComments = (data.posts || []).flatMap(p => p.comments || []);
       const newComments: SyntheticComment[] = [];
       const numNew = Math.floor(Math.random() * 3) + 2;
       
@@ -248,7 +248,7 @@ const SyntheticPost: React.FC<SyntheticPostProps> = ({ data }) => {
   const generateReply = (parentId: string) => {
     if (!syntheticPost) return;
     
-    const vocabulary = extractVocabulary(data.posts);
+    const vocabulary = extractVocabulary(data.posts || []);
     const realComments = data.posts.flatMap(p => p.comments || []);
     
     const addReplyToComment = (comments: SyntheticComment[]): SyntheticComment[] => {

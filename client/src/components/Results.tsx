@@ -88,15 +88,15 @@ const Results: React.FC<ResultsProps> = ({
   const generateCleanedData = (data: AnalysisData) => {
     return {
       analysis_metadata: {
-        subreddits: data.summary.subreddits,
-        date_range: data.summary.dateRange,
-        total_posts: data.summary.totalPosts,
-        total_comments: data.summary.totalComments,
+        subreddits: data.summary?.subreddits || [],
+        date_range: data.summary?.dateRange || { startDate: '', endDate: '' },
+        total_posts: data.summary?.totalPosts || 0,
+        total_comments: data.summary?.totalComments || 0,
         overall_sentiment: data.analysis.overall_sentiment?.average_score || 0,
         dominant_themes: data.analysis.overall_sentiment?.dominant_themes || [],
         key_emotions: data.analysis.overall_sentiment?.key_emotions || []
       },
-      posts_sample: data.posts.slice(0, 20).map(post => ({
+      posts_sample: (data.posts || []).slice(0, 20).map(post => ({
         id: post.id,
         title: post.title,
         score: post.score,
@@ -104,7 +104,7 @@ const Results: React.FC<ResultsProps> = ({
         subreddit: post.subreddit,
         created_utc: post.created_utc,
         selftext: (post.selftext || '').substring(0, 300) + ((post.selftext || '').length > 300 ? '...' : ''),
-        top_comments: post.comments.slice(0, 5).map(comment => ({
+        top_comments: (post.comments || []).slice(0, 5).map(comment => ({
           id: comment.id,
           body: (comment.body || '').substring(0, 200) + ((comment.body || '').length > 200 ? '...' : ''),
           score: comment.score,
@@ -113,10 +113,10 @@ const Results: React.FC<ResultsProps> = ({
       })),
       sentiment_patterns: {
         by_subreddit: data.analysis.by_subreddit || {},
-        timeline: data.analysis.timeline,
+        timeline: data.analysis.timeline || [],
         score_distribution: data.analysis.overall_sentiment?.sentiment_distribution || {}
       },
-      high_engagement_posts: data.posts
+      high_engagement_posts: (data.posts || [])
         .filter(post => post.score > 100 || post.num_comments > 50)
         .slice(0, 10)
         .map(post => ({
@@ -124,16 +124,16 @@ const Results: React.FC<ResultsProps> = ({
           score: post.score,
           num_comments: post.num_comments,
           subreddit: post.subreddit,
-          top_comment_scores: post.comments.slice(0, 3).map(c => c.score)
+          top_comment_scores: (post.comments || []).slice(0, 3).map(c => c.score)
         })),
-      controversial_indicators: data.posts
-        .filter(post => post.comments.length > 10)
+      controversial_indicators: (data.posts || [])
+        .filter(post => (post.comments?.length || 0) > 10)
         .slice(0, 10)
         .map(post => ({
           title: post.title,
           score: post.score,
-          comment_count: post.comments.length,
-          comment_score_variance: post.comments.map(c => c.score),
+          comment_count: post.comments?.length || 0,
+          comment_score_variance: (post.comments || []).map(c => c.score),
           subreddit: post.subreddit
         }))
     };
@@ -175,7 +175,7 @@ const Results: React.FC<ResultsProps> = ({
   };
 
   const handleSaveAnalysis = () => {
-    const defaultName = `${data.summary.subreddits.join(', ')} - ${new Date().toLocaleDateString()}`;
+    const defaultName = `${(data.summary?.subreddits || []).join(', ')} - ${new Date().toLocaleDateString()}`;
     setSaveForm({
       name: defaultName,
       description: '',
@@ -426,12 +426,12 @@ const Results: React.FC<ResultsProps> = ({
           <div className="analyzed-subreddits" style={{textAlign: 'right'}}>
             <span className="subreddits-label">Analyzing:</span>
             <div className="subreddits-list">
-              {data.summary.subreddits.map((subreddit, index) => (
+              {(data.summary?.subreddits || []).map((subreddit, index) => (
                 <span key={index} className="subreddit-badge">r/{subreddit}</span>
               ))}
             </div>
           </div>
-          <p>Comprehensive sentiment analysis across {data.summary.subreddits.length} subreddit{data.summary.subreddits.length !== 1 ? 's' : ''}</p>
+          <p>Comprehensive sentiment analysis across {data.summary?.subreddits?.length || 0} subreddit{(data.summary?.subreddits?.length || 0) !== 1 ? 's' : ''}</p>
         </div>
 
         <div className="hero-center">
@@ -462,7 +462,7 @@ const Results: React.FC<ResultsProps> = ({
               <div className="hero-metric-content">
                 <div className="hero-metric-value">
                   <AnimatedCounter
-                    value={data.summary.totalPosts}
+                    value={data.summary?.totalPosts || 0}
                     duration={2000}
                   />
                 </div>
@@ -475,7 +475,7 @@ const Results: React.FC<ResultsProps> = ({
               <div className="hero-metric-content">
                 <div className="hero-metric-value">
                   <AnimatedCounter
-                    value={data.summary.totalComments}
+                    value={data.summary?.totalComments || 0}
                     duration={2500}
                   />
                 </div>
@@ -651,10 +651,10 @@ const Results: React.FC<ResultsProps> = ({
                     <p className="chart-subtitle">How sentiment evolved during the analysis period</p>
                   </div>
                 </div>
-                <TimelineChart data={data.analysis.timeline} />
+                <TimelineChart data={data.analysis.timeline || []} />
               </div>
 
-              {data.summary.subreddits.length > 1 && (
+              {(data.summary?.subreddits?.length || 0) > 1 && (
                 <div className="chart-container">
                   <div className="chart-header">
                     <div>
@@ -667,7 +667,7 @@ const Results: React.FC<ResultsProps> = ({
               )}
 
               <div className="chart-container">
-                <SentimentHeatmap data={data.analysis.timeline} />
+                <SentimentHeatmap data={data.analysis.timeline || []} />
               </div>
             </div>
 
@@ -903,14 +903,14 @@ const Results: React.FC<ResultsProps> = ({
               <div className="sidebar-metric">
                 <div className="metric-icon">💬</div>
                 <div className="metric-info">
-                  <div className="metric-value">{data.summary.totalComments.toLocaleString()}</div>
+                  <div className="metric-value">{(data.summary?.totalComments || 0).toLocaleString()}</div>
                   <div className="metric-label">Comments</div>
                 </div>
               </div>
               <div className="sidebar-metric">
                 <div className="metric-icon">📝</div>
                 <div className="metric-info">
-                  <div className="metric-value">{data.summary.totalPosts.toLocaleString()}</div>
+                  <div className="metric-value">{(data.summary?.totalPosts || 0).toLocaleString()}</div>
                   <div className="metric-label">Posts</div>
                 </div>
               </div>
@@ -941,7 +941,7 @@ const Results: React.FC<ResultsProps> = ({
           <div className="sidebar-section">
             <h4>🏘️ Communities</h4>
             <div className="sidebar-subreddits">
-              {data.summary.subreddits.map((subreddit, index) => (
+              {(data.summary?.subreddits || []).map((subreddit, index) => (
                 <div key={index} className="sidebar-subreddit">
                   <span className="subreddit-name">r/{subreddit}</span>
                   {data.analysis.by_subreddit?.[subreddit] && (
@@ -960,12 +960,12 @@ const Results: React.FC<ResultsProps> = ({
               <div className="info-item">
                 <span className="info-label">Date Range:</span>
                 <span className="info-value">
-                  {new Date(data.summary.dateRange.startDate).toLocaleDateString()} - {new Date(data.summary.dateRange.endDate).toLocaleDateString()}
+                  {new Date(data.summary?.dateRange?.startDate || '').toLocaleDateString()} - {new Date(data.summary?.dateRange?.endDate || '').toLocaleDateString()}
                 </span>
               </div>
               <div className="info-item">
                 <span className="info-label">Total Items:</span>
-                <span className="info-value">{data.analysis.individual_scores.length.toLocaleString()}</span>
+                <span className="info-value">{(data.analysis.individual_scores?.length || 0).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -1023,10 +1023,10 @@ const Results: React.FC<ResultsProps> = ({
               <div className="save-dialog-preview">
                 <h4>Analysis Summary</h4>
                 <div className="preview-stats">
-                  <span>📊 {data.summary.subreddits.join(', ')}</span>
-                  <span>📝 {data.summary.totalPosts} posts</span>
-                  <span>💬 {data.summary.totalComments} comments</span>
-                  <span>📅 {data.summary.dateRange.startDate} to {data.summary.dateRange.endDate}</span>
+                  <span>📊 {(data.summary?.subreddits || []).join(', ')}</span>
+                  <span>📝 {data.summary?.totalPosts || 0} posts</span>
+                  <span>💬 {data.summary?.totalComments || 0} comments</span>
+                  <span>📅 {data.summary?.dateRange?.startDate || ''} to {data.summary?.dateRange?.endDate || ''}</span>
                 </div>
               </div>
             </div>

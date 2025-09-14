@@ -10,13 +10,13 @@ const PostsList: React.FC<PostsListProps> = ({ posts }) => {
   const [sortBy, setSortBy] = useState('score');
   const [filterSubreddit, setFilterSubreddit] = useState('');
 
-  const subreddits = Array.from(new Set(posts.map(post => post.subreddit))).sort();
+  const subreddits = Array.from(new Set((posts || []).map(post => post.subreddit))).sort();
 
-  const filteredAndSortedPosts = posts
+  const filteredAndSortedPosts = (posts || [])
     .filter(post => {
       const matchesSearch = !searchTerm || 
-        post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        post.selftext.toLowerCase().includes(searchTerm.toLowerCase());
+        post.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (post.selftext || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesSubreddit = !filterSubreddit || post.subreddit === filterSubreddit;
       
@@ -129,15 +129,15 @@ const PostsList: React.FC<PostsListProps> = ({ posts }) => {
             <div className="post-footer">
               <span className="author">by u/{post.author}</span>
               <span className="comments-count">
-                {post.comments.length} comments analyzed
+                {post.comments?.length || 0} comments analyzed
               </span>
             </div>
 
-            {post.comments.length > 0 && (
+            {(post.comments?.length || 0) > 0 && (
               <div className="comments-preview">
                 <h4>Top Comments:</h4>
                 <div className="comments-list">
-                  {post.comments
+                  {(post.comments || [])
                     .sort((a, b) => b.score - a.score)
                     .slice(0, 3)
                     .map(comment => (
