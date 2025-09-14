@@ -1,10 +1,8 @@
-// API Configuration - force production URL for now
-const getServerUrl = () => {
-  // Temporarily hardcode the production URL to get it working
-  return 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
-};
+// API Configuration - FORCE production URL
+export const API_BASE_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
 
-export const API_BASE_URL = getServerUrl();
+// Add a comment to force rebuild
+// Build timestamp: ${new Date().toISOString()}
 export const API_ENDPOINTS = {
   SETTINGS: `${API_BASE_URL}/api/settings`,
   ANALYZE: `${API_BASE_URL}/api/analyze`,

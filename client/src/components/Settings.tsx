@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_ENDPOINTS } from '../config';
 
 interface SettingsData {
   reddit: {
@@ -52,7 +53,7 @@ const Settings: React.FC = () => {
 
   const loadSettings = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/settings');
+      const response = await axios.get(API_ENDPOINTS.SETTINGS);
       setSettings(response.data);
 
       // Load persisted form data from localStorage, or use empty defaults
@@ -95,12 +96,12 @@ const Settings: React.FC = () => {
     setTestingKey(keyType);
     try {
       // First update the settings with current form values, then test
-      await axios.post('http://localhost:3001/api/update-settings', formData);
-      const response = await axios.post('http://localhost:3001/api/test-keys', { keyType });
+      await axios.post(API_ENDPOINTS.UPDATE_SETTINGS, formData);
+      const response = await axios.post(API_ENDPOINTS.TEST_KEYS, { keyType });
       setTestResults(prev => ({ ...prev, [keyType]: response.data }));
 
       // Refresh settings display to show updated status (but don't reset form data)
-      const settingsResponse = await axios.get('http://localhost:3001/api/settings');
+      const settingsResponse = await axios.get(API_ENDPOINTS.SETTINGS);
       setSettings(settingsResponse.data);
     } catch (error: any) {
       setTestResults(prev => ({
@@ -122,7 +123,7 @@ const Settings: React.FC = () => {
     setShowCostWarningModal(false);
 
     try {
-      const response = await axios.post('http://localhost:3001/api/update-settings', {
+      const response = await axios.post(`${API_BASE_URL}/api/update-settings`, {
         ...formData,
         preferredModel
       });
@@ -147,7 +148,7 @@ const Settings: React.FC = () => {
       };
 
       try {
-        const response = await axios.post('http://localhost:3001/api/update-settings', {
+        const response = await axios.post(`${API_BASE_URL}/api/update-settings`, {
           ...clearedData,
           preferredModel: 'claude'
         });
