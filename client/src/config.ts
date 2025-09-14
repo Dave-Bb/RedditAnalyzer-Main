@@ -1,13 +1,7 @@
-// API Configuration - automatically detects environment
+// API Configuration - force production URL for now
 const getServerUrl = () => {
-  // In production, use Cloudflare Workers API
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.REACT_APP_API_URL || 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
-  }
-  
-  // In development, use local server
-  const defaultPort = process.env.REACT_APP_SERVER_PORT || '3001';
-  return `http://localhost:${defaultPort}`;
+  // Temporarily hardcode the production URL to get it working
+  return 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
 };
 
 export const API_BASE_URL = getServerUrl();
