@@ -471,6 +471,11 @@ export default {
       if (path === '/api/test-keys' && request.method === 'POST') {
         const requestData = await request.json();
         const { keyType } = requestData;
+        
+        // Debug log that should definitely appear
+        console.log('🔥 TEST-KEYS ENDPOINT HIT! KeyType:', keyType);
+        console.log('🔥 Request data:', JSON.stringify(requestData));
+        
         let result;
 
         switch (keyType) {
