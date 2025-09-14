@@ -1,104 +1,65 @@
-# 🚀 Cloudflare Deployment Guide
+# 🚀 GitHub → Cloudflare Deployment Guide
 
-This guide will help you deploy your Reddit Analyzer to Cloudflare, making it accessible to anyone on the web while keeping user data private (stored in browser localStorage).
+Deploy your Reddit Analyzer using GitHub integration with Cloudflare Pages - the easiest way to go live!
 
 ## Prerequisites
 
-1. **Cloudflare Account**: Sign up at [cloudflare.com](https://cloudflare.com) (free tier works)
-2. **Node.js**: Ensure you have Node.js installed
+1. **GitHub Account**: Your code repository
+2. **Cloudflare Account**: Sign up at [cloudflare.com](https://cloudflare.com) (free tier works)
 3. **API Keys**: Your Reddit, Claude, and/or OpenAI API keys
 
-## Phase 1: Deploy the Backend (Cloudflare Workers)
+## Phase 1: GitHub Setup
 
-### Step 1: Install Wrangler CLI
+### Step 1: Push to GitHub
 ```bash
-npm install -g wrangler
+git init
+git add .
+git commit -m "Initial commit - Reddit Analyzer"
+git branch -M main
+git remote add origin https://github.com/yourusername/reddit-analyzer.git
+git push -u origin main
 ```
 
-### Step 2: Login to Cloudflare
-```bash
-wrangler login
-```
+## Phase 2: Cloudflare Setup
 
-### Step 3: Set up the Worker
-```bash
-cd worker
-npm install
-```
-
-### Step 4: Create KV Namespace (for future analysis storage)
-```bash
-wrangler kv:namespace create "ANALYSIS_STORAGE"
-wrangler kv:namespace create "ANALYSIS_STORAGE" --preview
-```
-
-Copy the namespace IDs and update `worker/wrangler.toml`:
-```toml
-[[kv_namespaces]]
-binding = "ANALYSIS_STORAGE"
-id = "your-actual-kv-namespace-id"
-preview_id = "your-actual-preview-kv-namespace-id"
-```
-
-### Step 5: Set Environment Variables (Secrets)
-```bash
-# Set your API keys as secrets (more secure than environment variables)
-wrangler secret put REDDIT_CLIENT_ID
-wrangler secret put REDDIT_CLIENT_SECRET
-wrangler secret put REDDIT_USER_AGENT
-wrangler secret put CLAUDE_API_KEY
-wrangler secret put OPENAI_API_KEY
-```
-
-When prompted, enter your actual API keys.
-
-### Step 6: Deploy the Worker
-```bash
-wrangler deploy
-```
-
-After deployment, you'll get a URL like: `https://reddit-analyzer-api.your-subdomain.workers.dev`
-
-**Save this URL - you'll need it for the frontend!**
-
-## Phase 2: Deploy the Frontend (Cloudflare Pages)
-
-### Step 1: Update Frontend Configuration
-Update `client/.env.production` with your actual Worker URL:
-```env
-REACT_APP_API_URL=https://reddit-analyzer-api.your-subdomain.workers.dev
-```
-
-### Step 2: Build the Frontend
-```bash
-cd client
-npm run build
-```
-
-### Step 3: Deploy to Cloudflare Pages
-
-**Option A: Using Wrangler (Recommended)**
-```bash
-# Install wrangler pages plugin if not already installed
-npm install -g wrangler
-
-# Deploy the build folder
-wrangler pages deploy build --project-name reddit-analyzer
-```
-
-**Option B: Using Cloudflare Dashboard**
+### Step 1: Connect GitHub to Cloudflare Pages
 1. Go to [Cloudflare Dashboard](https://dash.cloudflare.com)
 2. Click "Pages" in the sidebar
-3. Click "Create a project"
-4. Choose "Upload assets"
-5. Upload the entire `client/build` folder
-6. Set project name: `reddit-analyzer`
+3. Click "Connect to Git"
+4. Choose "GitHub" and authorize Cloudflare
+5. Select your `reddit-analyzer` repository
+6. Configure build settings:
+   - **Framework preset**: Create React App
+   - **Build command**: `cd client && npm install && npm run build`
+   - **Build output directory**: `client/build`
+   - **Root directory**: `/` (leave empty)
 
-### Step 4: Configure Environment Variables (Pages)
-In your Cloudflare Pages project settings:
-1. Go to Settings → Environment variables
-2. Add production environment variable:
-   - `REACT_APP_API_URL`: Your Worker URL from Phase 1
+### Step 2: Set Up Cloudflare Worker
+1. In Cloudflare Dashboard, go to "Workers & Pages"
+2. Click "Create application" → "Create Worker"
+3. Name it `reddit-analyzer-api`
+4. Replace the default code with the content from `worker/src/index.js`
+5. Click "Save and Deploy"
+
+### Step 3: Configure Environment Variables
+
+**For the Worker (API Backend):**
+1. In your Worker dashboard, go to "Settings" → "Variables"
+2. Add these as **Environment Variables** (encrypted):
+   - `REDDIT_CLIENT_ID`: Your Reddit app client ID
+   - `REDDIT_CLIENT_SECRET`: Your Reddit app client secret  
+   - `REDDIT_USER_AGENT`: `RedditSentimentAnalyzer/1.0`
+   - `CLAUDE_API_KEY`: Your Claude API key
+   - `OPENAI_API_KEY`: Your OpenAI API key
+   - `PREFERRED_MODEL`: `claude` or `openai`
+
+**For Pages (Frontend):**
+1. In your Pages project, go to "Settings" → "Environment variables"
+2. Add **Production** environment variable:
+   - `REACT_APP_API_URL`: `https://reddit-analyzer-api.your-subdomain.workers.dev`
+
+### Step 4: Get Your Worker URL
+After deploying your Worker, copy the URL (something like `https://reddit-analyzer-api.your-subdomain.workers.dev`) and update your Pages environment variable.
 
 ## Phase 3: Custom Domain (Optional)
 
