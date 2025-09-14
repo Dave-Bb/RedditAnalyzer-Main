@@ -37,6 +37,10 @@ class RedditService {
   }
 
   async getAccessToken() {
+    if (!this.clientId || !this.clientSecret) {
+      throw new Error('Reddit Client ID and Secret are required');
+    }
+    
     const auth = btoa(`${this.clientId}:${this.clientSecret}`);
 
     const response = await fetch('https://www.reddit.com/api/v1/access_token', {
@@ -50,7 +54,9 @@ class RedditService {
     });
 
     if (!response.ok) {
-      throw new Error(`Reddit auth failed: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Reddit auth error:', response.status, errorText);
+      throw new Error(`Reddit auth failed: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
@@ -150,10 +156,17 @@ class RedditService {
 
   async testConnection() {
     try {
+      console.log('Testing Reddit connection with:', {
+        clientId: this.clientId ? 'Present' : 'Missing',
+        clientSecret: this.clientSecret ? 'Present' : 'Missing',
+        userAgent: this.userAgent
+      });
+      
       await this.getAccessToken();
       return { success: true, message: 'Reddit API connection successful' };
     } catch (error) {
-      return { success: false, message: error.message };
+      console.error('Reddit test failed:', error);
+      return { success: false, message: `Reddit API error: ${error.message}` };
     }
   }
 }
@@ -450,16 +463,20 @@ export default {
             break;
           case 'claude':
             // Create temporary service with provided key
+            console.log('Testing Claude with key:', requestData.claudeApiKey ? 'Present' : 'Missing');
             const tempClaudeService = new SentimentService({
               CLAUDE_API_KEY: requestData.claudeApiKey
             });
+            console.log('Claude service created, key in service:', tempClaudeService.claudeApiKey ? 'Present' : 'Missing');
             result = await tempClaudeService.testClaude();
             break;
           case 'openai':
             // Create temporary service with provided key
+            console.log('Testing OpenAI with key:', requestData.openaiApiKey ? 'Present' : 'Missing');
             const tempOpenAIService = new SentimentService({
               OPENAI_API_KEY: requestData.openaiApiKey
             });
+            console.log('OpenAI service created, key in service:', tempOpenAIService.openaiApiKey ? 'Present' : 'Missing');
             result = await tempOpenAIService.testOpenAI();
             break;
           default:
