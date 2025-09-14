@@ -10,8 +10,8 @@ import SentimentHeatmap from './SentimentHeatmap';
 import WordCloud from './WordCloud';
 import SyntheticPost from './SyntheticPost';
 
-// Simple hardcoded API URL for now
-const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+// Use the smart config instead of hardcoded URL
+const API_URL = API_ENDPOINTS.ANALYZE.replace('/api/analyze', '');
 
 interface ResultsProps {
   data: AnalysisData;

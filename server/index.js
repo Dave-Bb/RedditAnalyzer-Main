@@ -253,6 +253,12 @@ app.post('/api/analyze', async (req, res) => {
     const analysisTime = Date.now() - analysisStart;
     console.log(`✅ Sentiment analysis complete`);
 
+    // Generate framework analysis automatically
+    console.log('🔬 Generating framework analysis...');
+    const frameworkAnalysis = await sentimentService.generateFrameworkAnalysis(redditData.posts, analysis);
+    analysis.framework_analysis = frameworkAnalysis;
+    console.log('✅ Framework analysis completed');
+
     // Get which AI model was used
     const aiModel = analysis.aiModel || sentimentService.getUsedModel();
 

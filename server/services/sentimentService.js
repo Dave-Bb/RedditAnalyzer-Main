@@ -118,30 +118,18 @@ class SentimentService {
 
     const cleanedText = text.trim();
 
-    // Skip very short or low-value comments
-    if (cleanedText.length < 5) return false;
+    // Skip very short comments (more lenient)
+    if (cleanedText.length < 3) return false;
 
     // Skip deleted/removed content
     if (cleanedText === '[deleted]' || cleanedText === '[removed]') return false;
 
-    // Skip emoji-only or single-word responses unless they have good scores
-    if (cleanedText.length < 15 && score < 5) {
-      // Allow if it contains actual words, not just emojis/punctuation
-      if (!/[a-zA-Z]{3,}/.test(cleanedText)) return false;
+    // Much more lenient filtering - only skip obvious junk
+    if (cleanedText.length < 8 && !/[a-zA-Z]{2,}/.test(cleanedText)) {
+      return false; // Skip if very short and no real words
     }
 
-    // Skip obvious spam or low-effort
-    const lowEffortPatterns = [
-      /^(lol|haha|lmao|this|yes|no|wtf|omg)\.?!?$/i,
-      /^[\d\s.,!?]+$/, // Just numbers and punctuation
-      /^[^\w\s]+$/ // Just symbols/emojis
-    ];
-
-    if (lowEffortPatterns.some(pattern => pattern.test(cleanedText))) {
-      return score >= 10; // Only include if highly upvoted
-    }
-
-    return true;
+    return true; // Include almost everything else
   }
 
   async analyzeWithClaude(texts) {
@@ -415,6 +403,10 @@ JSON response:
   async analyzeSentiment(redditData, options = null, abortSignal = null, progressCallback = null) {
     const texts = [];
     const textSources = [];
+    let totalComments = 0;
+    let filteredComments = 0;
+
+    console.log(`🔍 Starting text collection from ${redditData.posts.length} posts...`);
 
     // Collect all texts (posts and comments) with cleaning
     redditData.posts.forEach(post => {
@@ -435,15 +427,22 @@ JSON response:
       }
 
       post.comments.forEach(comment => {
+        totalComments++;
         if (comment.body && this.shouldIncludeText(comment.body, comment.score)) {
           const cleanComment = this.cleanTextForAnalysis(comment.body);
           if (cleanComment) {
             texts.push(cleanComment);
             textSources.push({ type: 'comment', postId: post.id, commentId: comment.id, subreddit: post.subreddit, originalScore: comment.score });
+            filteredComments++;
           }
         }
       });
     });
+
+    console.log(`📊 Text collection results:`);
+    console.log(`   - Total comments found: ${totalComments}`);
+    console.log(`   - Comments included after filtering: ${filteredComments}`);
+    console.log(`   - Total texts for analysis: ${texts.length}`);
 
     if (texts.length === 0) {
       return {

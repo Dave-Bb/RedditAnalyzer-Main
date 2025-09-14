@@ -10,7 +10,9 @@ import { API_ENDPOINTS } from './config';
 import axios from 'axios';
 
 // Simple hardcoded API URL for now
-const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+import { API_BASE_URL } from './config';
+
+const API_URL = API_BASE_URL;
 
 function App() {
   const [currentView, setCurrentView] = useState<'analysis' | 'settings' | 'history' | 'about'>('analysis');
