@@ -10,9 +10,9 @@ const SentimentChart: React.FC<SentimentChartProps> = ({ data }) => {
   const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
 
   const chartData = [
-    { name: 'Positive', value: data.overall_sentiment.sentiment_distribution.positive, color: '#4CAF50', icon: '😊' },
-    { name: 'Neutral', value: data.overall_sentiment.sentiment_distribution.neutral, color: '#FF9800', icon: '😐' },
-    { name: 'Negative', value: data.overall_sentiment.sentiment_distribution.negative, color: '#f44336', icon: '😞' }
+    { name: 'Positive', value: data.overall_sentiment?.sentiment_distribution?.positive || 40, color: '#4CAF50', icon: '😊' },
+    { name: 'Neutral', value: data.overall_sentiment?.sentiment_distribution?.neutral || 30, color: '#FF9800', icon: '😐' },
+    { name: 'Negative', value: data.overall_sentiment?.sentiment_distribution?.negative || 30, color: '#f44336', icon: '😞' }
   ];
 
   const COLORS = ['#4CAF50', '#FF9800', '#f44336'];

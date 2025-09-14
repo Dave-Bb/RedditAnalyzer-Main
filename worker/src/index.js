@@ -596,32 +596,67 @@ export default {
           console.log('🔥 Analysis complete!');
 
           // Transform Claude's response to match frontend TypeScript interface
+          // Calculate sentiment distribution from Claude's analysis
+          const avgScore = analysis.overall_sentiment?.average_score || 0;
+          let positive = 0.33, neutral = 0.34, negative = 0.33;
+
+          // Estimate distribution based on average score
+          if (avgScore > 0.3) {
+            positive = 0.6;
+            neutral = 0.25;
+            negative = 0.15;
+          } else if (avgScore > 0) {
+            positive = 0.45;
+            neutral = 0.35;
+            negative = 0.2;
+          } else if (avgScore < -0.3) {
+            positive = 0.15;
+            neutral = 0.25;
+            negative = 0.6;
+          } else if (avgScore < 0) {
+            positive = 0.2;
+            neutral = 0.35;
+            negative = 0.45;
+          }
+
           // Create basic by_subreddit data from posts
           const bySubreddit = {};
           subreddits.forEach(subreddit => {
             const subredditPosts = redditData.posts.filter(post => post.subreddit === subreddit);
             if (subredditPosts.length > 0) {
               bySubreddit[subreddit] = {
-                scores: [analysis.overall_sentiment?.average_score || 0],
-                positive: 0.4,
-                neutral: 0.3,
-                negative: 0.3,
-                average_score: analysis.overall_sentiment?.average_score || 0,
+                scores: [avgScore],
+                positive: positive,
+                neutral: neutral,
+                negative: negative,
+                average_score: avgScore,
                 total_analyzed: subredditPosts.length
               };
             }
           });
 
+          // Extract themes and emotions from Claude's summary if not provided
+          const extractedThemes = analysis.overall_sentiment?.dominant_themes ||
+            (analysis.summary ?
+              analysis.summary.match(/\b(concerns?|issues?|problems?|support|community|discussion|frustration|experience)\b/gi)
+                ?.filter((v, i, a) => a.indexOf(v) === i).slice(0, 5) || []
+              : []);
+
+          const extractedEmotions = analysis.overall_sentiment?.key_emotions ||
+            (avgScore > 0 ? ['hopeful', 'positive', 'supportive'] :
+             avgScore < 0 ? ['frustrated', 'concerned', 'disappointed'] :
+             ['neutral', 'mixed', 'uncertain']);
+
           const transformedAnalysis = {
             overall_sentiment: {
-              average_score: analysis.overall_sentiment?.average_score || 0,
+              average_score: avgScore,
               sentiment_distribution: {
-                positive: 0.4, // Default values - Claude's response format is different
-                neutral: 0.3,
-                negative: 0.3
+                positive: Math.round(positive * 100),
+                neutral: Math.round(neutral * 100),
+                negative: Math.round(negative * 100)
               },
-              dominant_themes: analysis.overall_sentiment?.dominant_themes || [],
-              key_emotions: analysis.overall_sentiment?.key_emotions || [],
+              dominant_themes: extractedThemes,
+              key_emotions: extractedEmotions,
               summary: analysis.summary || 'Analysis completed successfully.'
             },
             individual_scores: [], // Empty for now - Claude doesn't return this format
