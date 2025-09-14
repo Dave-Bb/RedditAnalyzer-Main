@@ -1,13 +1,12 @@
-// API Configuration - automatically detects server port
+// API Configuration - automatically detects environment
 const getServerUrl = () => {
-  // Try common ports in order
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const possiblePorts = [3001, 3002, 3003, 3004];
-
-  // In development, try to detect the actual server port
-  // For now, default to 3001 but allow override
+  // In production, use Cloudflare Workers API
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.REACT_APP_API_URL || 'https://your-worker-name.your-subdomain.workers.dev';
+  }
+  
+  // In development, use local server
   const defaultPort = process.env.REACT_APP_SERVER_PORT || '3001';
-
   return `http://localhost:${defaultPort}`;
 };
 
