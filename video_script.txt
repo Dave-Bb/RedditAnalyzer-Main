@@ -1,0 +1,115 @@
+REDDIT BRAIN AI - VIDEO PRESENTATION SCRIPT
+============================================
+
+## OPENING (0:00-0:30)
+• Hi, I'm [NAME] and this is Reddit Brain AI
+• Built for [HACKATHON NAME] using Claude AI API
+• Problem: Reddit has tons of valuable insights but it's overwhelming to analyze manually
+• Solution: AI-powered sentiment analysis that turns Reddit chaos into actionable insights
+
+## CORE DEMO - MUST COVER IN FIRST 3 MIN (0:30-3:00)
+
+### 1. LIVE ANALYSIS DEMO (0:30-1:30)
+• Show homepage - clean, simple interface
+• Enter subreddit: "technology" or "worldnews"
+• Set date range: Last 7 days
+• Hit "Analyze" button
+• EXPLAIN while loading: "It's fetching Reddit posts, analyzing sentiment with Claude AI"
+• Show results appearing in real-time
+
+### 2. KEY FEATURES (1:30-2:30)
+• Overall Sentiment Score with visual gauge
+• Sentiment Distribution pie chart - positive/negative/neutral breakdown
+• Time-based trends graph - how sentiment changes over time
+• Key Themes extraction - what people are talking about
+• Top Posts analysis - most impactful content
+• AI Insights - Claude's interpretation of the data
+
+### 3. TECHNICAL HIGHLIGHTS (2:30-3:00)
+• Powered by Claude 3.5 Sonnet API (Anthropic)
+• Batch processing - analyzes 100s of posts efficiently
+• Real Reddit data via Reddit OAuth API
+• Full-stack: React TypeScript + Node.js Express
+• Local storage for analysis history
+
+## EXTENDED DEMO (3:00-5:30)
+
+### 4. MULTI-SUBREDDIT ANALYSIS (3:00-3:45)
+• Compare multiple subreddits simultaneously
+• Example: "stocks, wallstreetbets, investing"
+• Show how different communities react to same topics
+• Useful for market sentiment, brand monitoring
+
+### 5. SETTINGS & API CONFIGURATION (3:45-4:15)
+• Show Settings page
+• Explain API key flexibility - Claude or OpenAI
+• Test connection feature
+• Privacy: keys stored locally, never sent to our servers
+
+### 6. HISTORY FEATURE (4:15-4:45)
+• Show saved analyses
+• Click to view past analysis
+• Compare sentiment over different time periods
+• Export/save capabilities
+
+### 7. USE CASES (4:45-5:30)
+• Brand monitoring - track product sentiment
+• Investment research - gauge market mood
+• Content creators - find trending topics
+• Researchers - analyze public opinion
+• Crisis management - monitor reputation
+
+## TECHNICAL DEEP DIVE (5:30-6:30)
+
+### 8. ARCHITECTURE (5:30-6:00)
+• Frontend: React 18 with TypeScript for type safety
+• Backend: Express.js handling API orchestration
+• Parallel processing for speed
+• Rate limiting to respect API limits
+• Responsive design for mobile/desktop
+
+### 9. AI INTEGRATION (6:00-6:30)
+• Claude API for nuanced sentiment analysis
+• Batch processing optimization - 100 texts per call
+• Fallback to OpenAI if needed
+• Structured prompts for consistent results
+• Theme extraction and insight generation
+
+## CLOSING (6:30-7:00)
+
+### 10. FUTURE ENHANCEMENTS
+• Real-time monitoring with alerts
+• Sentiment prediction models
+• Export to CSV/PDF reports
+• Chrome extension for instant analysis
+• API for developers
+
+### 11. WRAP UP
+• Reddit Brain AI - turning social media noise into signal
+• Built with Claude AI for [HACKATHON]
+• Makes Reddit analysis accessible to everyone
+• Thank you for watching!
+
+============================================
+QUICK TIPS FOR RECORDING:
+============================================
+
+1. ENERGY: Start strong - judges decide in first 30 seconds
+2. SHOW DON'T TELL: Keep clicking through the app while talking
+3. PREPARE DATA: Have interesting subreddits ready (crypto, politics, tech)
+4. HIGHLIGHT CLAUDE: Emphasize Claude API usage multiple times
+5. SMOOTH TRANSITIONS: Practice the flow between sections
+6. BACKUP PLAN: Have pre-saved analysis ready if live demo fails
+7. CLEAR AUDIO: Use good mic, speak clearly
+8. SCREEN RECORDING: Full screen browser, hide bookmarks
+9. EDIT TIGHTLY: Cut any dead time or loading screens
+10. END STRONG: Clear call-to-action or memorable closing
+
+EMERGENCY TALKING POINTS IF YOU NEED TO FILL TIME:
+- Explain the sentiment scoring algorithm
+- Talk about Reddit API rate limits and how you handle them
+- Discuss the batch processing optimization
+- Show the actual API response in dev tools
+- Explain why Claude is better than other sentiment APIs
+- Talk about data privacy and local storage
+- Mention scalability and performance optimizations

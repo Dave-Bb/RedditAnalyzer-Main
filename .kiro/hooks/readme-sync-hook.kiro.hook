@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "README Sync",
+  "description": "Automatically updates README.md documentation when core features are modified or new API endpoints are added",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "server/index.js",
+      "server/services/*",
+      "client/src/*",
+      "package.json",
+      "client/package.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Files have been modified that likely contain core features or API endpoints. Please review the changes and update the README.md file to reflect any new features, API changes, setup instructions, or other documentation that needs to be kept current. Focus on user-facing changes and ensure the documentation remains accurate and helpful."
+  }
+}

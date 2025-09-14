@@ -1,0 +1,18 @@
+name = "reddit-analyzer-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Environment variables (you'll set these in Cloudflare dashboard)
+[vars]
+# These will be set via Cloudflare dashboard or wrangler secrets
+# REDDIT_CLIENT_ID = ""
+# REDDIT_CLIENT_SECRET = ""
+# REDDIT_USER_AGENT = "RedditSentimentAnalyzer/1.0"
+# CLAUDE_API_KEY = ""
+# OPENAI_API_KEY = ""
+
+# CORS settings
+[[kv_namespaces]]
+binding = "ANALYSIS_STORAGE"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
