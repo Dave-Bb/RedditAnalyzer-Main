@@ -210,9 +210,6 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({
       if (selectedModel !== apiStatus.preferredModel) {
         // Skip server update - we use localStorage now
         localStorage.setItem('preferred_model', selectedModel);
-        // await axios.post(`${API_URL}/api/update-settings`, {
-          preferredModel: selectedModel
-        });
       }
 
       // Get timeout from localStorage or use default
