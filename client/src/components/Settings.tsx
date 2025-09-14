@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_ENDPOINTS } from '../config';
+
+// Simple hardcoded API URL for now
+const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
 
 interface SettingsData {
   reddit: {
@@ -53,7 +55,7 @@ const Settings: React.FC = () => {
 
   const loadSettings = async () => {
     try {
-      const response = await axios.get(API_ENDPOINTS.SETTINGS);
+      const response = await axios.get(`${API_URL}/api/settings`);
       setSettings(response.data);
 
       // Load persisted form data from localStorage, or use empty defaults
@@ -95,14 +97,31 @@ const Settings: React.FC = () => {
   const testApiKey = async (keyType: string) => {
     setTestingKey(keyType);
     try {
-      // First update the settings with current form values, then test
-      await axios.post(API_ENDPOINTS.UPDATE_SETTINGS, formData);
-      const response = await axios.post(API_ENDPOINTS.TEST_KEYS, { keyType });
+      // Test API keys by sending them directly (not storing on server)
+      const testData = {
+        keyType,
+        // Send only the specific key being tested
+        ...(keyType === 'reddit' && {
+          redditClientId: formData.redditClientId,
+          redditClientSecret: formData.redditClientSecret,
+          redditUserAgent: formData.redditUserAgent
+        }),
+        ...(keyType === 'claude' && {
+          claudeApiKey: formData.claudeApiKey
+        }),
+        ...(keyType === 'openai' && {
+          openaiApiKey: formData.openaiApiKey
+        })
+      };
+
+      const response = await axios.post(`${API_URL}/api/test-keys`, testData);
       setTestResults(prev => ({ ...prev, [keyType]: response.data }));
 
-      // Refresh settings display to show updated status (but don't reset form data)
-      const settingsResponse = await axios.get(API_ENDPOINTS.SETTINGS);
-      setSettings(settingsResponse.data);
+      // Save to localStorage if test successful (client-side only)
+      if (response.data.success) {
+        localStorage.setItem(`${keyType}_keys`, JSON.stringify(testData));
+        alert(`${keyType.toUpperCase()} API key test successful! Keys saved locally.`);
+      }
     } catch (error: any) {
       setTestResults(prev => ({
         ...prev,
@@ -122,23 +141,18 @@ const Settings: React.FC = () => {
   const confirmUpdateSettings = async () => {
     setShowCostWarningModal(false);
 
-    try {
-      const response = await axios.post(API_ENDPOINTS.UPDATE_SETTINGS, {
-        ...formData,
-        preferredModel
-      });
-      if (response.data.success) {
-        alert('Settings updated! They will be active for this session.');
-        loadSettings(); // Refresh settings display
-        setTestResults({}); // Clear test results
-      }
-    } catch (error: any) {
-      alert('Failed to update settings: ' + (error.response?.data?.error || error.message));
-    }
+    // Save settings to localStorage only (no server storage)
+    localStorage.setItem('user_settings', JSON.stringify({
+      ...formData,
+      preferredModel
+    }));
+
+    alert('Settings saved locally! Your API keys stay private in your browser.');
+    setTestResults({}); // Clear test results
   };
 
   const clearAllSettings = async () => {
-    if (window.confirm('Are you sure you want to clear all API keys? This will remove all current settings.')) {
+    if (window.confirm('Are you sure you want to clear all API keys? This will remove all current settings from your browser.')) {
       const clearedData = {
         redditClientId: '',
         redditClientSecret: '',
@@ -147,26 +161,19 @@ const Settings: React.FC = () => {
         openaiApiKey: ''
       };
 
-      try {
-        const response = await axios.post(API_ENDPOINTS.UPDATE_SETTINGS, {
-          ...clearedData,
-          preferredModel: 'claude'
-        });
+      // Clear everything from localStorage only (no server storage)
+      setFormData(clearedData);
+      setPreferredModel('claude');
+      setTestResults({});
 
-        if (response.data.success) {
-          setFormData(clearedData);
-          setPreferredModel('claude');
-          setTestResults({});
+      localStorage.removeItem('apiFormData');
+      localStorage.removeItem('user_settings');
+      localStorage.removeItem('reddit_keys');
+      localStorage.removeItem('claude_keys');
+      localStorage.removeItem('openai_keys');
+      localStorage.removeItem('preferred_model');
 
-          // Clear localStorage as well
-          localStorage.removeItem('apiFormData');
-
-          loadSettings();
-          alert('All settings cleared successfully!');
-        }
-      } catch (error: any) {
-        alert('Failed to clear settings: ' + (error.response?.data?.error || error.message));
-      }
+      alert('All settings cleared from your browser! Your privacy is protected.');
     }
   };
 
@@ -288,16 +295,9 @@ const Settings: React.FC = () => {
                     );
                     localStorage.setItem('apiFormData', JSON.stringify(filteredData));
 
-                    // Auto-save preference to server immediately
-                    try {
-                      await axios.post('http://localhost:3001/api/update-settings', {
-                        ...formData,
-                        preferredModel: newModel
-                      });
-                      console.log('✅ Auto-saved Claude preference to both localStorage and server');
-                    } catch (error) {
-                      console.error('Failed to save Claude preference:', error);
-                    }
+                    // Auto-save preference to localStorage only (privacy-first)
+                    localStorage.setItem('preferred_model', newModel);
+                    console.log('✅ Auto-saved Claude preference to localStorage only');
                   }}
                 />
                 <div className="model-info">
@@ -322,16 +322,9 @@ const Settings: React.FC = () => {
                     );
                     localStorage.setItem('apiFormData', JSON.stringify(filteredData));
 
-                    // Auto-save preference to server immediately
-                    try {
-                      await axios.post('http://localhost:3001/api/update-settings', {
-                        ...formData,
-                        preferredModel: newModel
-                      });
-                      console.log('✅ Auto-saved OpenAI preference to both localStorage and server');
-                    } catch (error) {
-                      console.error('Failed to save OpenAI preference:', error);
-                    }
+                    // Auto-save preference to localStorage only (privacy-first)
+                    localStorage.setItem('preferred_model', newModel);
+                    console.log('✅ Auto-saved OpenAI preference to localStorage only');
                   }}
                 />
                 <div className="model-info">

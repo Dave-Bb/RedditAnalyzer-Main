@@ -434,18 +434,33 @@ export default {
       }
 
       if (path === '/api/test-keys' && request.method === 'POST') {
-        const { keyType } = await request.json();
+        const requestData = await request.json();
+        const { keyType } = requestData;
         let result;
 
         switch (keyType) {
           case 'reddit':
-            result = await redditService.testConnection();
+            // Create temporary service with provided keys
+            const tempRedditService = new RedditService({
+              REDDIT_CLIENT_ID: requestData.redditClientId,
+              REDDIT_CLIENT_SECRET: requestData.redditClientSecret,
+              REDDIT_USER_AGENT: requestData.redditUserAgent
+            });
+            result = await tempRedditService.testConnection();
             break;
           case 'claude':
-            result = await sentimentService.testClaude();
+            // Create temporary service with provided key
+            const tempClaudeService = new SentimentService({
+              CLAUDE_API_KEY: requestData.claudeApiKey
+            });
+            result = await tempClaudeService.testClaude();
             break;
           case 'openai':
-            result = await sentimentService.testOpenAI();
+            // Create temporary service with provided key
+            const tempOpenAIService = new SentimentService({
+              OPENAI_API_KEY: requestData.openaiApiKey
+            });
+            result = await tempOpenAIService.testOpenAI();
             break;
           default:
             result = { success: false, message: 'Invalid key type' };
