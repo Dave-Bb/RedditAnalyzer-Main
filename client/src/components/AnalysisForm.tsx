@@ -78,9 +78,9 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({
       // Set initial selected model based on preference and availability
       if (preferredModel === 'openai' && hasOpenAI) {
         setSelectedModel('openai');
-      } else if (ai.hasClaude) {
+      } else if (hasClaude) {
         setSelectedModel('claude');
-      } else if (ai.hasOpenAI) {
+      } else if (hasOpenAI) {
         setSelectedModel('openai');
       }
     } catch (error) {
