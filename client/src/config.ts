@@ -1,8 +1,16 @@
-// API Configuration - FORCE production URL
-export const API_BASE_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+// API Configuration - smart environment detection
+const getServerUrl = () => {
+  // In production, use Cloudflare Workers API
+  if (process.env.NODE_ENV === 'production') {
+    return process.env.REACT_APP_API_URL || 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+  }
+  
+  // In development, use local server
+  const defaultPort = process.env.REACT_APP_SERVER_PORT || '3001';
+  return `http://localhost:${defaultPort}`;
+};
 
-// Add a comment to force rebuild
-// Build timestamp: ${new Date().toISOString()}
+export const API_BASE_URL = getServerUrl();
 export const API_ENDPOINTS = {
   SETTINGS: `${API_BASE_URL}/api/settings`,
   ANALYZE: `${API_BASE_URL}/api/analyze`,
