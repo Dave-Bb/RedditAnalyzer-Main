@@ -112,7 +112,7 @@ const Results: React.FC<ResultsProps> = ({
         }))
       })),
       sentiment_patterns: {
-        by_subreddit: data.analysis.by_subreddit,
+        by_subreddit: data.analysis.by_subreddit || {},
         timeline: data.analysis.timeline,
         score_distribution: data.analysis.overall_sentiment?.sentiment_distribution || {}
       },
@@ -662,7 +662,7 @@ const Results: React.FC<ResultsProps> = ({
                       <p className="chart-subtitle">How sentiment varies across different subreddits</p>
                     </div>
                   </div>
-                  <SubredditComparison data={data.analysis.by_subreddit} />
+                  <SubredditComparison data={data.analysis.by_subreddit || {}} />
                 </div>
               )}
 
@@ -944,7 +944,7 @@ const Results: React.FC<ResultsProps> = ({
               {data.summary.subreddits.map((subreddit, index) => (
                 <div key={index} className="sidebar-subreddit">
                   <span className="subreddit-name">r/{subreddit}</span>
-                  {data.analysis.by_subreddit[subreddit] && (
+                  {data.analysis.by_subreddit?.[subreddit] && (
                     <span className="subreddit-sentiment">
                       {data.analysis.by_subreddit[subreddit].average_score.toFixed(2)}
                     </span>

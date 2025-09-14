@@ -596,6 +596,22 @@ export default {
           console.log('🔥 Analysis complete!');
 
           // Transform Claude's response to match frontend TypeScript interface
+          // Create basic by_subreddit data from posts
+          const bySubreddit = {};
+          subreddits.forEach(subreddit => {
+            const subredditPosts = redditData.posts.filter(post => post.subreddit === subreddit);
+            if (subredditPosts.length > 0) {
+              bySubreddit[subreddit] = {
+                scores: [analysis.overall_sentiment?.average_score || 0],
+                positive: 0.4,
+                neutral: 0.3,
+                negative: 0.3,
+                average_score: analysis.overall_sentiment?.average_score || 0,
+                total_analyzed: subredditPosts.length
+              };
+            }
+          });
+
           const transformedAnalysis = {
             overall_sentiment: {
               average_score: analysis.overall_sentiment?.average_score || 0,
@@ -609,7 +625,7 @@ export default {
               summary: analysis.summary || 'Analysis completed successfully.'
             },
             individual_scores: [], // Empty for now - Claude doesn't return this format
-            by_subreddit: {}, // Empty for now - would need to process post_sentiments
+            by_subreddit: bySubreddit,
             timeline: [], // Empty for now - would need to group by date
             aiModel: analysis.aiModel
           };
