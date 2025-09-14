@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { AnalysisData } from '../types';
 import { API_ENDPOINTS } from '../config';
+
+// Simple hardcoded API URL for now
+const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
 import SentimentChart from './SentimentChart';
 import TimelineChart from './TimelineChart';
 import SubredditComparison from './SubredditComparison';
@@ -190,7 +193,7 @@ const Results: React.FC<ResultsProps> = ({
         tags: saveForm.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
       };
 
-      const response = await axios.post('http://localhost:3001/api/analyses', {
+      const response = await axios.post(`${API_URL}/api/analyses`, {
         analysisData: data,
         metadata
       });
@@ -210,7 +213,7 @@ const Results: React.FC<ResultsProps> = ({
   const retryFrameworkAnalysis = async () => {
     setIsGeneratingFramework(true);
     try {
-      const response = await axios.post('http://localhost:3001/api/generate-framework-analysis', {
+      const response = await axios.post(`${API_URL}/api/generate-framework-analysis`, {
         analysisData: data
       });
 
@@ -246,7 +249,7 @@ const Results: React.FC<ResultsProps> = ({
   const retryAIInsights = async () => {
     setIsRegeneratingInsights(true);
     try {
-      const response = await axios.post('http://localhost:3001/api/regenerate-claude-insights', {
+      const response = await axios.post(`${API_URL}/api/regenerate-claude-insights`, {
         analysisData: data
       });
 
@@ -548,11 +551,11 @@ const Results: React.FC<ResultsProps> = ({
                     if (window.confirm('Cancel the ongoing analysis? This will stop all AI API calls.')) {
                       try {
                         // Get active analyses and cancel them
-                        const activeResponse = await axios.get('http://localhost:3001/api/active-analyses');
+                        const activeResponse = await axios.get(`${API_URL}/api/active-analyses`);
                         if (activeResponse.data.success && activeResponse.data.activeAnalyses.length > 0) {
                           // Cancel the most recent analysis (likely the reanalysis we started)
                           const mostRecent = activeResponse.data.activeAnalyses[0];
-                          await axios.post('http://localhost:3001/api/cancel-analysis', {
+                          await axios.post(`${API_URL}/api/cancel-analysis`, {
                             analysisId: mostRecent.id
                           });
 

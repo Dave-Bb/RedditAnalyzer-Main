@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AnalysisData, SyntheticPostData, SyntheticComment } from '../types';
 
+// Simple hardcoded API URL for now
+const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+
 interface SyntheticPostProps {
   data: AnalysisData;
 }
@@ -125,7 +128,7 @@ const SyntheticPost: React.FC<SyntheticPostProps> = ({ data }) => {
       console.log(`📊 Prepared clean data: ${cleanData.sample_posts.length} posts from r/${cleanData.subreddit}`);
       console.log('🔗 Sending request to Claude API...');
 
-      const response = await fetch('http://localhost:3001/api/generate-synthetic-post', {
+      const response = await fetch(`${API_URL}/api/generate-synthetic-post`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

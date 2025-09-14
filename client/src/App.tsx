@@ -7,6 +7,9 @@ import History from './components/History';
 import About from './components/About';
 import { AnalysisData } from './types';
 import { API_ENDPOINTS } from './config';
+
+// Simple hardcoded API URL for now
+const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
 import axios from 'axios';
 
 function App() {
@@ -41,7 +44,7 @@ function App() {
   // Poll for progress updates
   const pollProgress = async (id: string) => {
     try {
-      const response = await axios.get(`http://localhost:3001/api/progress/${id}`);
+      const response = await axios.get(`${API_URL}/api/progress/${id}`);
       const progress = response.data;
 
       setAnalysisProgress(prev => ({
@@ -166,7 +169,7 @@ function App() {
       eventSourceRef.current.close();
     }
 
-    eventSourceRef.current = new EventSource('http://localhost:3001/api/logs');
+    eventSourceRef.current = new EventSource(`${API_URL}/api/logs`);
     
     eventSourceRef.current.onmessage = (event) => {
       try {

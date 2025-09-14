@@ -64,12 +64,14 @@ class RedditService {
   }
 
   async fetchSubredditData(subreddits, startDate, endDate, postLimit = 50) {
+    console.log('🔥 Fetching subreddits:', subreddits, 'limit:', postLimit);
     const accessToken = await this.getAccessToken();
     const posts = [];
 
     for (const subreddit of subreddits) {
       try {
         const url = `https://oauth.reddit.com/r/${subreddit}/new?limit=${postLimit}`;
+        console.log('🔥 Fetching URL:', url);
 
         const response = await fetch(url, {
           headers: {
@@ -78,8 +80,9 @@ class RedditService {
           },
         });
 
+        console.log('🔥 Reddit response status:', response.status);
         if (!response.ok) {
-          console.error(`Failed to fetch r/${subreddit}: ${response.status}`);
+          console.error(`🔥 Failed to fetch r/${subreddit}: ${response.status}`);
           continue;
         }
 
@@ -271,14 +274,27 @@ Return a JSON response with this structure:
     }
 
     const data = await response.json();
+    console.log('🔥 Claude raw response:', JSON.stringify(data));
+
     const content = data.content[0].text;
+    console.log('🔥 Claude content to parse:', content);
 
     try {
-      const analysis = JSON.parse(content);
+      // Extract JSON from Claude's response (it might have extra text)
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in Claude response');
+      }
+
+      const jsonString = jsonMatch[0];
+      console.log('🔥 Extracted JSON:', jsonString);
+
+      const analysis = JSON.parse(jsonString);
       analysis.aiModel = 'claude';
       return analysis;
     } catch (error) {
-      throw new Error('Failed to parse Claude response as JSON');
+      console.error('🔥 JSON parse error. Claude returned:', content);
+      throw new Error(`Failed to parse Claude response as JSON: ${error.message}`);
     }
   }
 
@@ -471,11 +487,11 @@ export default {
       if (path === '/api/test-keys' && request.method === 'POST') {
         const requestData = await request.json();
         const { keyType } = requestData;
-        
+
         // Debug log that should definitely appear
         console.log('🔥 TEST-KEYS ENDPOINT HIT! KeyType:', keyType);
         console.log('🔥 Request data:', JSON.stringify(requestData));
-        
+
         let result;
 
         switch (keyType) {
@@ -520,36 +536,97 @@ export default {
       }
 
       if (path === '/api/analyze' && request.method === 'POST') {
-        const { subreddits, startDate, endDate, postLimit = 50 } = await request.json();
+        const requestData = await request.json();
+        const { subreddits, startDate, endDate, postLimit = 50, apiKeys } = requestData;
 
-        // Fetch Reddit data
-        const redditData = await redditService.fetchSubredditData(
-          subreddits,
-          startDate,
-          endDate,
-          Math.min(postLimit, 50) // Limit for performance
-        );
+        console.log('🔥 ANALYZE ENDPOINT HIT!');
+        console.log('🔥 API Keys provided:', {
+          reddit: !!apiKeys?.reddit?.redditClientId,
+          claude: !!apiKeys?.claude?.claudeApiKey,
+          openai: !!apiKeys?.openai?.openaiApiKey
+        });
 
-        // Analyze sentiment
-        const analysis = await sentimentService.analyzeSentiment(redditData);
+        try {
+          // Create services with provided API keys
+          const tempRedditService = new RedditService({
+            REDDIT_CLIENT_ID: apiKeys?.reddit?.redditClientId,
+            REDDIT_CLIENT_SECRET: apiKeys?.reddit?.redditClientSecret,
+            REDDIT_USER_AGENT: apiKeys?.reddit?.redditUserAgent || 'RedditSentimentAnalyzer/1.0'
+          });
 
-        const response = {
-          success: true,
-          data: {
-            posts: redditData.posts,
-            analysis: analysis,
-            summary: {
-              totalPosts: redditData.posts.length,
-              totalComments: redditData.posts.reduce((sum, post) => sum + post.comments.length, 0),
-              subreddits: subreddits,
-              dateRange: { startDate, endDate }
-            },
-            aiModel: analysis.aiModel
-          }
-        };
+          const tempSentimentService = new SentimentService({
+            CLAUDE_API_KEY: apiKeys?.claude?.claudeApiKey,
+            OPENAI_API_KEY: apiKeys?.openai?.openaiApiKey,
+            PREFERRED_MODEL: 'claude'
+          });
 
-        return addCORSHeaders(new Response(JSON.stringify(response), {
+          // Fetch Reddit data
+          console.log('🔥 Fetching Reddit data...');
+          const redditData = await tempRedditService.fetchSubredditData(
+            subreddits,
+            startDate,
+            endDate,
+            Math.min(postLimit, 50)
+          );
+
+          console.log('🔥 Reddit data fetched:', redditData.posts.length, 'posts');
+
+          // Analyze sentiment
+          console.log('🔥 Starting sentiment analysis...');
+          const analysis = await tempSentimentService.analyzeSentiment(redditData);
+
+          console.log('🔥 Analysis complete!');
+
+          const response = {
+            success: true,
+            data: {
+              posts: redditData.posts,
+              analysis: analysis,
+              summary: {
+                totalPosts: redditData.posts.length,
+                totalComments: redditData.posts.reduce((sum, post) => sum + post.comments.length, 0),
+                subreddits: subreddits,
+                dateRange: { startDate, endDate }
+              },
+              aiModel: analysis.aiModel
+            }
+          };
+
+          return addCORSHeaders(new Response(JSON.stringify(response), {
+            headers: { 'Content-Type': 'application/json' }
+          }));
+
+        } catch (error) {
+          console.error('🔥 Analysis error:', error);
+          return addCORSHeaders(new Response(JSON.stringify({
+            success: false,
+            error: error.message
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }));
+        }
+      }
+
+      if (path.startsWith('/api/progress/')) {
+        // Simple progress endpoint - since Workers are fast, just return completed
+        return addCORSHeaders(new Response(JSON.stringify({
+          stage: 'complete',
+          percentage: 100,
+          message: 'Analysis completed'
+        }), {
           headers: { 'Content-Type': 'application/json' }
+        }));
+      }
+
+      if (path === '/api/logs') {
+        // Simple logs endpoint - return empty stream for now
+        return addCORSHeaders(new Response('data: {"message":"Logs not available in production","type":"info"}\n\n', {
+          headers: { 
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+          }
         }));
       }
 

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { AnalysisData } from '../types';
 
+// Simple hardcoded API URL for now
+const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+
 interface SavedAnalysis {
   id: string;
   timestamp: string;
@@ -44,7 +47,7 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
 
   const checkApiStatus = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/settings');
+      const response = await axios.get(`${API_URL}/api/settings`);
       if (response.data.success) {
         setApiStatus(response.data);
       }
@@ -55,7 +58,7 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
 
   const loadAnalyses = async () => {
     try {
-      const response = await axios.get('http://localhost:3001/api/analyses');
+      const response = await axios.get(`${API_URL}/api/analyses`);
       if (response.data.success) {
         setAnalyses(response.data.analyses);
       }
@@ -69,7 +72,7 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
   const loadAnalysis = async (id: string) => {
     setLoadingId(id);
     try {
-      const response = await axios.get(`http://localhost:3001/api/analyses/${id}`);
+      const response = await axios.get(`${API_URL}/api/analyses/${id}`);
       if (response.data.success) {
         onLoadAnalysis(response.data.analysis.data);
       }
@@ -87,7 +90,7 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
     }
 
     try {
-      const response = await axios.delete(`http://localhost:3001/api/analyses/${id}`);
+      const response = await axios.delete(`${API_URL}/api/analyses/${id}`);
       if (response.data.success) {
         setAnalyses(prev => prev.filter(analysis => analysis.id !== id));
       }
@@ -104,7 +107,7 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
 
     setGeneratingFrameworkId(id);
     try {
-      const response = await axios.post(`http://localhost:3001/api/analyses/${id}/generate-framework`);
+      const response = await axios.post(`${API_URL}/api/analyses/${id}/generate-framework`);
       if (response.data.success) {
         alert('Framework analysis generated successfully! Load the analysis to see the results.');
       } else {
@@ -135,7 +138,7 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
     setReanalyzingId(id);
     setShowModelSelector(null);
     try {
-      const response = await axios.post(`http://localhost:3001/api/analyses/${id}/reanalyze`, {
+      const response = await axios.post(`${API_URL}/api/analyses/${id}/reanalyze`, {
         preferredModel: selectedModel
       });
       if (response.data.success) {
@@ -181,7 +184,7 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
 
   // Filter analyses
   const filteredAnalyses = analyses.filter(analysis => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       analysis.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       analysis.subreddits.some(sub => sub.toLowerCase().includes(searchTerm.toLowerCase())) ||
       analysis.summary.topThemes.some(theme => theme.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -346,9 +349,9 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
 
                 <div className="card-sentiment">
                   <div className="sentiment-score">
-                    <div 
+                    <div
                       className="sentiment-circle"
-                      style={{ 
+                      style={{
                         backgroundColor: getSentimentColor(analysis.summary.overallSentiment),
                         boxShadow: `0 0 20px ${getSentimentColor(analysis.summary.overallSentiment)}40`
                       }}

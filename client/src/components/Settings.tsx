@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { response } from 'express';
+import { response } from 'express';
+import { response } from 'express';
 
 // Simple hardcoded API URL for now
 const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
@@ -55,8 +58,34 @@ const Settings: React.FC = () => {
 
   const loadSettings = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/settings`);
-      setSettings(response.data);
+      // Check localStorage for saved API keys instead of server
+      const redditKeys = localStorage.getItem('reddit_keys');
+      const claudeKeys = localStorage.getItem('claude_keys');
+      const openaiKeys = localStorage.getItem('openai_keys');
+      const preferredModel = localStorage.getItem('preferred_model') || 'claude';
+
+      // Create settings object based on localStorage
+      const localSettings = {
+        reddit: {
+          hasClientId: !!redditKeys,
+          hasClientSecret: !!redditKeys,
+          userAgent: 'RedditSentimentAnalyzer/1.0'
+        },
+        ai: {
+          hasClaude: !!claudeKeys,
+          hasOpenAI: !!openaiKeys,
+          preferredModel: preferredModel
+        }
+      };
+
+      console.log('🔥 Settings loaded from localStorage:', {
+        redditKeys: !!redditKeys,
+        claudeKeys: !!claudeKeys,
+        openaiKeys: !!openaiKeys,
+        localSettings
+      });
+
+      setSettings(localSettings);
 
       // Load persisted form data from localStorage, or use empty defaults
       const savedFormData = localStorage.getItem('apiFormData');
@@ -121,6 +150,8 @@ const Settings: React.FC = () => {
       if (response.data.success) {
         localStorage.setItem(`${keyType}_keys`, JSON.stringify(testData));
         alert(`${keyType.toUpperCase()} API key test successful! Keys saved locally.`);
+        // Refresh settings display to show updated status
+        loadSettings();
       }
     } catch (error: any) {
       setTestResults(prev => ({

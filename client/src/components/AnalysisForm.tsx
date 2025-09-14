@@ -92,7 +92,7 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({
   // Poll for progress updates
   const pollProgress = async (id: string) => {
     try {
-      const response = await axios.get(`http://localhost:3001/api/progress/${id}`);
+      const response = await axios.get(`${API_URL}/api/progress/${id}`);
       const progress = response.data;
 
       setAnalysisProgress(prev => ({
@@ -208,7 +208,9 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({
     try {
       // Update model preference before analysis
       if (selectedModel !== apiStatus.preferredModel) {
-        await axios.post('http://localhost:3001/api/update-settings', {
+        // Skip server update - we use localStorage now
+        localStorage.setItem('preferred_model', selectedModel);
+        // await axios.post(`${API_URL}/api/update-settings`, {
           preferredModel: selectedModel
         });
       }
