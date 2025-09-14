@@ -40,7 +40,7 @@ git push -u origin main
 3. Name it `reddit-analyzer-api`
 4. Replace the default code with the content from `worker/src/index.js`
 5. Click "Save and Deploy"
-
+ 
 ### Step 3: Configure Environment Variables
 
 **For the Worker (API Backend):**

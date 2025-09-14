@@ -40,7 +40,7 @@ class RedditService {
     if (!this.clientId || !this.clientSecret) {
       throw new Error('Reddit Client ID and Secret are required');
     }
-    
+
     const auth = btoa(`${this.clientId}:${this.clientSecret}`);
 
     const response = await fetch('https://www.reddit.com/api/v1/access_token', {
@@ -154,15 +154,35 @@ class RedditService {
     }
   }
 
-  async testConnection() {
+  async testConnection(clientId = null, clientSecret = null, userAgent = null) {
+    // Use provided keys or fall back to instance keys
+    const idToUse = clientId || this.clientId;
+    const secretToUse = clientSecret || this.clientSecret;
+    const agentToUse = userAgent || this.userAgent;
+
     try {
       console.log('Testing Reddit connection with:', {
-        clientId: this.clientId ? 'Present' : 'Missing',
-        clientSecret: this.clientSecret ? 'Present' : 'Missing',
-        userAgent: this.userAgent
+        clientId: idToUse ? 'Present' : 'Missing',
+        clientSecret: secretToUse ? 'Present' : 'Missing',
+        userAgent: agentToUse
       });
-      
+
+      // Temporarily override instance values for this test
+      const originalId = this.clientId;
+      const originalSecret = this.clientSecret;
+      const originalAgent = this.userAgent;
+
+      this.clientId = idToUse;
+      this.clientSecret = secretToUse;
+      this.userAgent = agentToUse;
+
       await this.getAccessToken();
+
+      // Restore original values
+      this.clientId = originalId;
+      this.clientSecret = originalSecret;
+      this.userAgent = originalAgent;
+
       return { success: true, message: 'Reddit API connection successful' };
     } catch (error) {
       console.error('Reddit test failed:', error);
@@ -326,8 +346,9 @@ Return a JSON response with this structure:
     }
   }
 
-  async testClaude() {
-    if (!this.claudeApiKey) {
+  async testClaude(apiKey = null) {
+    const keyToUse = apiKey || this.claudeApiKey;
+    if (!keyToUse) {
       return { success: false, message: 'Claude API key not found' };
     }
 
@@ -336,7 +357,7 @@ Return a JSON response with this structure:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.claudeApiKey,
+          'x-api-key': keyToUse,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
@@ -359,8 +380,9 @@ Return a JSON response with this structure:
     }
   }
 
-  async testOpenAI() {
-    if (!this.openaiApiKey) {
+  async testOpenAI(apiKey = null) {
+    const keyToUse = apiKey || this.openaiApiKey;
+    if (!keyToUse) {
       return { success: false, message: 'OpenAI API key not found' };
     }
 
@@ -369,7 +391,7 @@ Return a JSON response with this structure:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.openaiApiKey}`,
+          'Authorization': `Bearer ${keyToUse}`,
         },
         body: JSON.stringify({
           model: 'gpt-4',
@@ -459,7 +481,11 @@ export default {
               REDDIT_CLIENT_SECRET: requestData.redditClientSecret,
               REDDIT_USER_AGENT: requestData.redditUserAgent
             });
-            result = await tempRedditService.testConnection();
+            result = await tempRedditService.testConnection(
+              requestData.redditClientId,
+              requestData.redditClientSecret,
+              requestData.redditUserAgent
+            );
             break;
           case 'claude':
             // Create temporary service with provided key
@@ -468,7 +494,7 @@ export default {
               CLAUDE_API_KEY: requestData.claudeApiKey
             });
             console.log('Claude service created, key in service:', tempClaudeService.claudeApiKey ? 'Present' : 'Missing');
-            result = await tempClaudeService.testClaude();
+            result = await tempClaudeService.testClaude(requestData.claudeApiKey);
             break;
           case 'openai':
             // Create temporary service with provided key
@@ -477,7 +503,7 @@ export default {
               OPENAI_API_KEY: requestData.openaiApiKey
             });
             console.log('OpenAI service created, key in service:', tempOpenAIService.openaiApiKey ? 'Present' : 'Missing');
-            result = await tempOpenAIService.testOpenAI();
+            result = await tempOpenAIService.testOpenAI(requestData.openaiApiKey);
             break;
           default:
             result = { success: false, message: 'Invalid key type' };
