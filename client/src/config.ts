@@ -2,7 +2,7 @@
 const getServerUrl = () => {
   // In production, use Cloudflare Workers API
   if (process.env.NODE_ENV === 'production') {
-    return process.env.REACT_APP_API_URL || 'https://your-worker-name.your-subdomain.workers.dev';
+    return process.env.REACT_APP_API_URL || 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
   }
   
   // In development, use local server
