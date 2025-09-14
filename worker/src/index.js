@@ -9,6 +9,27 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+// Function to broadcast logs - in Workers this just logs to console
+// Real streaming happens directly in the analyze endpoint
+function broadcastLog(message, type = 'info') {
+  console.log(message); // Always log to console for Cloudflare logs
+
+  // In Workers, we'll handle streaming differently per request
+  if (typeof globalThis !== 'undefined' && globalThis.currentLogController && globalThis.currentLogEncoder) {
+    try {
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        message: message,
+        type: type
+      };
+      const data = `data: ${JSON.stringify(logEntry)}\n\n`;
+      globalThis.currentLogController.enqueue(globalThis.currentLogEncoder.encode(data));
+    } catch (e) {
+      // If streaming fails, just ignore
+    }
+  }
+}
+
 // Handle CORS preflight requests
 function handleCORS(request) {
   if (request.method === 'OPTIONS') {
@@ -64,14 +85,26 @@ class RedditService {
   }
 
   async fetchSubredditData(subreddits, startDate, endDate, postLimit = 50) {
-    console.log('🔥 Fetching subreddits:', subreddits, 'limit:', postLimit);
+    console.log('🔥 Authenticating with Reddit API...');
     const accessToken = await this.getAccessToken();
     const posts = [];
 
+    // Cloudflare Workers limit: max ~50 subrequests per execution
+    // Smart strategy: Get fewer posts but WITH comments for meaningful analysis
+    const maxPostsPerSubreddit = Math.min(8, postLimit); // Fetch 8 posts per subreddit
+    let totalRequests = 1; // Started with 1 for auth
+    const allPostsForComments = []; // Collect all posts first
+
+    // Step 1: Fetch all posts first
     for (const subreddit of subreddits) {
       try {
-        const url = `https://oauth.reddit.com/r/${subreddit}/new?limit=${postLimit}`;
-        console.log('🔥 Fetching URL:', url);
+        if (totalRequests >= 45) {
+          console.log('⚠️ Approaching request limit, stopping subreddit fetching');
+          break;
+        }
+
+        const url = `https://oauth.reddit.com/r/${subreddit}/hot?limit=${maxPostsPerSubreddit}`;
+        console.log('📡 Fetching from r/' + subreddit + ' (limit: ' + maxPostsPerSubreddit + ')');
 
         const response = await fetch(url, {
           headers: {
@@ -79,57 +112,92 @@ class RedditService {
             'User-Agent': this.userAgent,
           },
         });
+        totalRequests++;
 
-        console.log('🔥 Reddit response status:', response.status);
         if (!response.ok) {
-          console.error(`🔥 Failed to fetch r/${subreddit}: ${response.status}`);
+          console.log('❌ Failed to fetch r/' + subreddit + ': ' + response.status);
           continue;
         }
 
         const data = await response.json();
-        console.log(`🔥 Raw Reddit response for r/${subreddit}:`, data.data?.children?.length || 0, 'posts');
+        const rawPosts = data.data?.children || [];
+        console.log('📊 Retrieved ' + rawPosts.length + ' posts from r/' + subreddit);
 
-        for (const post of data.data.children) {
+        // Filter and collect posts
+        for (const post of rawPosts) {
           const postData = post.data;
-          console.log(`🔥 Processing post: ${postData.title?.substring(0, 50)}...`);
-
-          // Filter by date if provided - make date filtering less restrictive
           const postDate = new Date(postData.created_utc * 1000);
-          console.log(`🔥 Post date: ${postDate.toISOString()}, Start: ${startDate}, End: ${endDate}`);
 
-          if (startDate && postDate < new Date(startDate)) {
-            console.log(`🔥 Skipping post - too old`);
-            continue;
+          // Apply date filtering if provided
+          if (startDate && endDate) {
+            const startDateObj = new Date(startDate);
+            const endDateObj = new Date(endDate);
+            endDateObj.setHours(23, 59, 59, 999);
+
+            if (postDate < startDateObj || postDate > endDateObj) {
+              continue;
+            }
           }
-          if (endDate && postDate > new Date(endDate)) {
-            console.log(`🔥 Skipping post - too new`);
-            continue;
-          }
 
-          // Fetch comments for this post
-          const comments = await this.fetchPostComments(subreddit, postData.id, accessToken);
-          console.log(`🔥 Fetched ${comments.length} comments for post ${postData.id}`);
-
-          // Map to structure that matches your TypeScript interface
-          posts.push({
+          // Store post for potential comment fetching
+          allPostsForComments.push({
             id: postData.id,
             title: postData.title,
-            selftext: postData.selftext || '', // Use 'selftext' not 'body'
+            selftext: postData.selftext || '',
             author: postData.author,
             score: postData.score,
-            num_comments: postData.num_comments, // Add this
-            created_utc: postData.created_utc, // Keep as timestamp
+            num_comments: postData.num_comments,
+            created_utc: postData.created_utc,
             subreddit: postData.subreddit,
-            permalink: postData.permalink, // Add this
+            permalink: postData.permalink,
             url: postData.url,
-            comments: comments,
+            comments: [], // Will be filled later
+            priority: postData.score + (postData.num_comments * 2) // Score for prioritization
           });
-
-          console.log(`🔥 Added post to results. Total posts now: ${posts.length}`);
         }
       } catch (error) {
-        console.error(`Error fetching r/${subreddit}:`, error);
+        console.log('❌ Error fetching r/' + subreddit + ':', error.message);
       }
+    }
+
+    // Step 2: Prioritize posts by engagement and fetch comments for top ones
+    allPostsForComments.sort((a, b) => b.priority - a.priority); // Sort by priority (score + comments)
+
+    const maxCommentsToFetch = Math.min(15, 45 - totalRequests); // Use remaining request budget
+    console.log('📝 Fetching comments for top ' + maxCommentsToFetch + ' posts...');
+
+    for (let i = 0; i < Math.min(maxCommentsToFetch, allPostsForComments.length); i++) {
+      if (totalRequests >= 45) break; // Safety check
+
+      const post = allPostsForComments[i];
+      try {
+        post.comments = await this.fetchPostComments(post.subreddit, post.id, accessToken);
+        totalRequests++;
+
+        if (i % 5 === 0) { // Log progress every 5 posts
+          console.log('💬 Fetched comments for ' + (i + 1) + '/' + Math.min(maxCommentsToFetch, allPostsForComments.length) + ' posts');
+        }
+      } catch (error) {
+        console.log('⚠️ Failed to fetch comments for post ' + post.id);
+        post.comments = []; // Keep post but with empty comments
+      }
+    }
+
+    // Step 3: Add all posts to final results (some with comments, some without)
+    posts.push(...allPostsForComments);
+
+    console.log('✅ Final result: ' + posts.length + ' posts, ' +
+      posts.filter(p => p.comments.length > 0).length + ' with comments');
+    console.log('🔢 Total API requests used: ' + totalRequests + '/50');
+
+    console.log(`🔥 Reddit data fetched: ${posts.length} posts`);
+
+    // If no posts found after filtering, log helpful info
+    if (posts.length === 0) {
+      console.log(`⚠️ No posts found after date filtering. Try:
+        1. Expanding your date range (current: ${startDate} to ${endDate})
+        2. Using more active subreddits
+        3. Checking if the subreddit names are correct`);
     }
 
     return { posts };
@@ -238,16 +306,12 @@ class SentimentService {
   }
 
   async analyzeWithClaude(redditData) {
-    const posts = redditData.posts.slice(0, 25); // Limit for performance
+    const posts = redditData.posts.slice(0, 15); // Reduce to 15 posts for faster processing
 
-    const prompt = `Analyze the sentiment of these Reddit posts and comments. For each post, provide a sentiment score from -1 (very negative) to 1 (very positive), and classify as positive, negative, or neutral.
+    const prompt = `Analyze the sentiment of these Reddit posts. For each post, provide a sentiment score from -1 (very negative) to 1 (very positive), and classify as positive, negative, or neutral.
 
-Posts to analyze:
-${JSON.stringify(posts.map(p => ({
-      title: p.title,
-      body: p.body,
-      comments: p.comments.map(c => c.body).slice(0, 5)
-    })), null, 2)}
+Posts to analyze (titles and content only):
+${posts.map(p => `Title: ${p.title}\nContent: ${p.selftext || 'No content'}`).join('\n\n')}
 
 Return a JSON response with this structure:
 {
@@ -444,6 +508,120 @@ Return a JSON response with this structure:
       return { success: false, message: error.message };
     }
   }
+
+  async generateFrameworkAnalysis(posts, analysis) {
+    console.log('🔬 Starting framework analysis generation...');
+
+    try {
+      // Prepare data for framework analysis
+      const frameworkPrompt = `Generate a comprehensive framework analysis of this Reddit sentiment data.
+
+Data Summary:
+- Total Posts: ${posts.length}
+- Overall Sentiment: ${analysis.overall_sentiment?.average_score || 'N/A'}
+- Distribution: ${JSON.stringify(analysis.overall_sentiment?.sentiment_distribution || {})}
+
+Sample Posts (first 5):
+${posts.slice(0, 5).map(post => `Title: ${post.title}\nContent: ${post.selftext || post.body || 'N/A'}`).join('\n\n')}
+
+Please provide a structured analysis using these sections:
+
+**PATTERN IDENTIFICATION**
+Identify recurring themes, sentiment patterns, and discussion trends.
+
+**TEMPORAL TRENDS**
+Analyze how sentiment and topics evolved over time.
+
+**KEY INSIGHTS**
+Provide 3-5 key insights about the community sentiment and concerns.
+
+**RECOMMENDATIONS**
+Suggest actionable recommendations based on the sentiment analysis.
+
+**STRATEGIC QUESTIONS**
+Pose 2-3 strategic questions for further investigation.
+
+**EXECUTIVE SUMMARY**
+Provide a concise summary for decision-makers.
+
+Format your response as clear, well-structured text with section headers.`;
+
+      const aiModel = this.claudeApiKey ? 'claude' : 'openai';
+      let frameworkResult;
+
+      if (aiModel === 'claude' && this.claudeApiKey) {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.claudeApiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: 'claude-3-5-sonnet-20241022',
+            max_tokens: 4000,
+            messages: [{
+              role: 'user',
+              content: frameworkPrompt
+            }]
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Claude API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        frameworkResult = data.content[0].text;
+
+      } else if (this.openaiApiKey) {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.openaiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4',
+            messages: [{
+              role: 'user',
+              content: frameworkPrompt
+            }],
+            max_tokens: 4000,
+            temperature: 0.1,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`OpenAI API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        frameworkResult = data.choices[0].message.content;
+
+      } else {
+        throw new Error('No AI API keys available for framework analysis');
+      }
+
+      console.log('🎯 Framework analysis completed with ' + aiModel);
+
+      return {
+        success: true,
+        analysis: frameworkResult,
+        generated_at: new Date().toISOString(),
+        model_used: aiModel,
+        posts_analyzed: posts.length
+      };
+
+    } catch (error) {
+      console.log('❌ Framework analysis error: ' + error.message);
+      return {
+        success: false,
+        error: error.message,
+        generated_at: new Date().toISOString()
+      };
+    }
+  }
 }
 
 // Main worker handler
@@ -492,6 +670,16 @@ export default {
             hasClaude: !!env.CLAUDE_API_KEY,
             hasOpenAI: !!env.OPENAI_API_KEY,
             preferredModel: env.PREFERRED_MODEL || 'claude'
+          },
+          platform: {
+            type: 'cloudflare-workers',
+            limitations: {
+              maxSubreddits: 3,
+              maxPostsPerSubreddit: 15,
+              maxTotalRequests: 45,
+              recommendedPostLimit: 25,
+              message: 'Cloudflare Workers has API request limits. For larger analyses, consider running locally.'
+            }
           }
         };
 
@@ -555,14 +743,14 @@ export default {
         const requestData = await request.json();
         const { subreddits, startDate, endDate, postLimit = 50, apiKeys } = requestData;
 
-        console.log('🔥 ANALYZE ENDPOINT HIT!');
-        console.log('🔥 Request params:', { subreddits, startDate, endDate, postLimit });
-        console.log('🔥 API Keys provided:', {
+        console.log('📊 Starting analysis for subreddits:', subreddits.join(', '));
+        console.log('🔧 Date range:', startDate, 'to', endDate);
+        console.log('📊 Post limit:', postLimit, 'per subreddit');
+        console.log('🔑 API Keys configured:', {
           reddit: !!apiKeys?.reddit?.redditClientId,
           claude: !!apiKeys?.claude?.claudeApiKey,
           openai: !!apiKeys?.openai?.openaiApiKey
         });
-        console.log('🔥 Full apiKeys structure:', JSON.stringify(apiKeys, null, 2));
 
         try {
           // Create services with provided API keys
@@ -579,7 +767,7 @@ export default {
           });
 
           // Fetch Reddit data
-          console.log('🔥 Fetching Reddit data...');
+          console.log('📡 Fetching Reddit data from ' + subreddits.length + ' subreddit(s)...');
           const redditData = await tempRedditService.fetchSubredditData(
             subreddits,
             startDate,
@@ -591,7 +779,15 @@ export default {
 
           // Analyze sentiment
           console.log('🔥 Starting sentiment analysis...');
+          console.log('🧠 Analyzing sentiment with AI for ' + redditData.posts.length + ' posts...');
           const analysis = await tempSentimentService.analyzeSentiment(redditData);
+          console.log('✅ Sentiment analysis completed using ' + (analysis.aiModel || 'AI'));
+
+          // Generate framework analysis automatically
+          console.log('🔬 Generating framework analysis...');
+          const frameworkAnalysis = await tempSentimentService.generateFrameworkAnalysis(redditData.posts, analysis);
+          analysis.framework_analysis = frameworkAnalysis;
+          console.log('✅ Framework analysis completed');
 
           console.log('🔥 Analysis complete!');
 
@@ -685,10 +881,51 @@ export default {
           }));
 
         } catch (error) {
-          console.error('🔥 Analysis error:', error);
+          console.log('❌ Analysis failed: ' + error.message);
+
+          let userFriendlyMessage = 'Analysis failed. ';
+          let suggestions = [];
+
+          // Handle specific error types
+          if (error.message.includes('Too many subrequests')) {
+            userFriendlyMessage = 'Analysis failed due to Cloudflare Workers API limits. ';
+            suggestions = [
+              'Try analyzing fewer subreddits (1-2 max)',
+              'Reduce the post limit to 10-25 posts',
+              'Use shorter date ranges to get fewer posts',
+              'Consider running this locally instead for larger analyses'
+            ];
+          } else if (error.message.includes('timeout') || error.message.includes('time')) {
+            userFriendlyMessage = 'Analysis timed out. ';
+            suggestions = [
+              'Try analyzing fewer posts or subreddits',
+              'Use shorter date ranges',
+              'Try again - sometimes Reddit API is slow'
+            ];
+          } else if (error.message.includes('Reddit') || error.message.includes('authentication')) {
+            userFriendlyMessage = 'Reddit API error. ';
+            suggestions = [
+              'Check if your Reddit API keys are correct',
+              'Make sure the subreddit names are valid',
+              'Reddit might be experiencing issues - try again later'
+            ];
+          } else if (error.message.includes('Claude') || error.message.includes('OpenAI')) {
+            userFriendlyMessage = 'AI analysis failed. ';
+            suggestions = [
+              'Check if your AI API keys (Claude/OpenAI) are valid',
+              'You might have hit API rate limits - wait a few minutes',
+              'Try again with fewer posts'
+            ];
+          }
+
           return addCORSHeaders(new Response(JSON.stringify({
             success: false,
-            error: error.message
+            error: userFriendlyMessage + error.message,
+            userMessage: userFriendlyMessage,
+            suggestions: suggestions,
+            technicalError: error.message,
+            errorType: error.name || 'Unknown',
+            timestamp: new Date().toISOString()
           }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
@@ -708,21 +945,101 @@ export default {
       }
 
       if (path === '/api/logs') {
-        // Return a simple message for logs
-        const stream = new ReadableStream({
-          start(controller) {
-            const encoder = new TextEncoder();
-            controller.enqueue(encoder.encode('data: {"message":"📡 Connected to analysis logs","type":"connection"}\n\n'));
-            controller.enqueue(encoder.encode('data: {"message":"🔗 Ready for analysis - logs will appear here during processing","type":"info"}\n\n'));
-          }
-        });
+        // Simple message for Cloudflare Workers - real logs are in CF dashboard
+        return addCORSHeaders(new Response(JSON.stringify({
+          message: 'Logs are available in Cloudflare Workers dashboard',
+          note: 'In Cloudflare Workers, console.log outputs appear in the Wrangler tail or CF dashboard',
+          dashboard_url: 'https://dash.cloudflare.com/',
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        }));
+      }
 
-        return addCORSHeaders(new Response(stream, {
-          headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-          }
+      if (path === '/api/generate-framework-analysis' && request.method === 'POST') {
+        const requestData = await request.json();
+        const { analysisData } = requestData;
+
+        try {
+          console.log('🔬 Generating framework analysis...');
+
+          // Create a sentiment service to generate framework analysis
+          const sentimentService = new SentimentService(env);
+          const frameworkAnalysis = await sentimentService.generateFrameworkAnalysis(analysisData.posts, analysisData.analysis);
+
+          console.log('✅ Framework analysis generated successfully');
+
+          return addCORSHeaders(new Response(JSON.stringify({
+            success: true,
+            framework_analysis: frameworkAnalysis
+          }), {
+            headers: { 'Content-Type': 'application/json' }
+          }));
+
+        } catch (error) {
+          console.log('❌ Framework analysis failed: ' + error.message);
+          return addCORSHeaders(new Response(JSON.stringify({
+            success: false,
+            error: 'Failed to generate framework analysis: ' + error.message
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          }));
+        }
+      }
+
+      // Analysis storage endpoints
+      if (path === '/api/analyses' && request.method === 'GET') {
+        // List saved analyses - for now return empty since we don't have persistent storage
+        return addCORSHeaders(new Response(JSON.stringify({
+          success: true,
+          analyses: [],
+          message: 'Analysis storage not available in Cloudflare Workers without KV setup'
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        }));
+      }
+
+      if (path === '/api/analyses' && request.method === 'POST') {
+        // Save analysis - for now just return success without actually saving
+        const requestData = await request.json();
+        console.log('💾 Analysis save requested (not persisted in basic Worker)');
+
+        return addCORSHeaders(new Response(JSON.stringify({
+          success: true,
+          analysis: {
+            id: 'temp_' + Date.now(),
+            name: requestData.metadata?.name || 'Unnamed Analysis',
+            created_at: new Date().toISOString(),
+            temporary: true
+          },
+          message: 'Analysis saved temporarily. For persistent storage, configure Cloudflare KV.'
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        }));
+      }
+
+      if (path.startsWith('/api/analyses/') && request.method === 'GET') {
+        // Get specific analysis - not available without persistent storage
+        const id = path.split('/').pop();
+        return addCORSHeaders(new Response(JSON.stringify({
+          success: false,
+          error: 'Analysis not found. Persistent storage not configured.'
+        }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        }));
+      }
+
+      if (path.startsWith('/api/analyses/') && request.method === 'DELETE') {
+        // Delete analysis - not available without persistent storage
+        const id = path.split('/').pop();
+        return addCORSHeaders(new Response(JSON.stringify({
+          success: false,
+          error: 'Analysis deletion not available without persistent storage.'
+        }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
         }));
       }
 
