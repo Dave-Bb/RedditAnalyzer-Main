@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { response } from 'express';
-import { response } from 'express';
-import { response } from 'express';
 
 // Simple hardcoded API URL for now
 const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
@@ -95,7 +92,7 @@ const Settings: React.FC = () => {
           setFormData(prev => ({
             ...prev,
             ...parsedData,
-            redditUserAgent: response.data.reddit.userAgent // Always use server's user agent
+            redditUserAgent: localSettings.reddit.userAgent // Always use server's user agent
           }));
         } catch (e) {
           console.error('Error parsing saved form data:', e);
@@ -104,11 +101,12 @@ const Settings: React.FC = () => {
         // Pre-fill user agent only
         setFormData(prev => ({
           ...prev,
-          redditUserAgent: response.data.reddit.userAgent
+          redditUserAgent: localSettings.reddit.userAgent
         }));
       }
 
-      setPreferredModel(response.data.ai.preferredModel || 'claude');
+      const model = localSettings.ai.preferredModel;
+      setPreferredModel(model === 'openai' ? 'openai' : 'claude');
 
       // Load saved timeout setting
       const savedTimeout = localStorage.getItem('analysisTimeout');
