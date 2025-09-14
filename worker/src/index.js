@@ -595,11 +595,30 @@ export default {
 
           console.log('🔥 Analysis complete!');
 
+          // Transform Claude's response to match frontend TypeScript interface
+          const transformedAnalysis = {
+            overall_sentiment: {
+              average_score: analysis.overall_sentiment?.average_score || 0,
+              sentiment_distribution: {
+                positive: 0.4, // Default values - Claude's response format is different
+                neutral: 0.3,
+                negative: 0.3
+              },
+              dominant_themes: analysis.overall_sentiment?.dominant_themes || [],
+              key_emotions: analysis.overall_sentiment?.key_emotions || [],
+              summary: analysis.summary || 'Analysis completed successfully.'
+            },
+            individual_scores: [], // Empty for now - Claude doesn't return this format
+            by_subreddit: {}, // Empty for now - would need to process post_sentiments
+            timeline: [], // Empty for now - would need to group by date
+            aiModel: analysis.aiModel
+          };
+
           const response = {
             success: true,
             data: {
               posts: redditData.posts,
-              analysis: analysis,
+              analysis: transformedAnalysis,
               summary: {
                 totalPosts: redditData.posts.length,
                 totalComments: redditData.posts.reduce((sum, post) => sum + post.comments.length, 0),

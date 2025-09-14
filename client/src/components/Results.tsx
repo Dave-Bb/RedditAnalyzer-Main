@@ -103,10 +103,10 @@ const Results: React.FC<ResultsProps> = ({
         num_comments: post.num_comments,
         subreddit: post.subreddit,
         created_utc: post.created_utc,
-        selftext: post.selftext.substring(0, 300) + (post.selftext.length > 300 ? '...' : ''),
+        selftext: (post.selftext || '').substring(0, 300) + ((post.selftext || '').length > 300 ? '...' : ''),
         top_comments: post.comments.slice(0, 5).map(comment => ({
           id: comment.id,
-          body: comment.body.substring(0, 200) + (comment.body.length > 200 ? '...' : ''),
+          body: (comment.body || '').substring(0, 200) + ((comment.body || '').length > 200 ? '...' : ''),
           score: comment.score,
           created_utc: comment.created_utc
         }))
