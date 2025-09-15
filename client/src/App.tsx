@@ -262,11 +262,11 @@ function App() {
             <div className="site-logo-title">
               <img
                 src={darkMode ? "/RedditBrainLogo_White.png" : "/RedditBrainLogo.png"}
-                alt="Reddit Brain AI"
+                alt="Bacon Brain AI"
                 className="site-logo"
               />
               <div className="title-text">
-                <h1>Reddit Brain AI</h1>
+                <h1>Bacon Brain AI</h1>
                 <p>Intelligent sentiment analysis for Reddit communities</p>
               </div>
             </div>
@@ -335,11 +335,11 @@ function App() {
                   <div className="welcome-logo">
                     <img
                       src={darkMode ? "/RedditBrainLogo_White.png" : "/RedditBrainLogo.png"}
-                      alt="Reddit Brain AI"
+                      alt="Bacon Brain AI"
                       className="welcome-logo-image"
                     />
                   </div>
-                  <h2>Welcome to Reddit Brain AI</h2>
+                  <h2>Welcome to Bacon Brain AI</h2>
                   <p>Start your analysis journey by clicking "New Analysis" to configure and run sentiment analysis on Reddit communities.</p>
 
                   {/* Sample Analysis Notification */}

@@ -9,9 +9,9 @@ const About: React.FC = () => {
 
       <div className="about-content">
         <section className="about-section">
-          <h3>What is Reddit Brain AI?</h3>
+          <h3>What is Bacon Brain AI?</h3>
           <p>
-            Reddit Brain AI is a powerful sentiment analysis tool that helps you understand the emotional tone
+            Bacon Brain AI is a powerful sentiment analysis tool that helps you understand the emotional tone
             and opinions within Reddit communities. By analyzing posts and comments from specified subreddits,
             it provides detailed insights into community sentiment, trending topics, and emotional patterns.
           </p>
@@ -66,7 +66,7 @@ const About: React.FC = () => {
         <section className="about-section">
           <h3>API Requirements</h3>
           <p>
-            To use Reddit Brain AI, you'll need API keys from:
+            To use Bacon Brain AI, you'll need API keys from:
           </p>
           <ul>
             <li><strong>Reddit API:</strong> For accessing Reddit posts and comments</li>
@@ -115,7 +115,7 @@ const About: React.FC = () => {
         <section className="about-section about-tech">
           <h3>🔗 Source Code</h3>
           <p>
-            Reddit Brain AI is open source! You can view the complete source code, contribute to the project,
+            Bacon Brain AI is open source! You can view the complete source code, contribute to the project,
             or report issues on GitHub.
           </p>
           <div className="github-link-container">

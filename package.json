@@ -1,5 +1,5 @@
 {
-  "name": "reddit-sentiment-analyzer",
+  "name": "bacon-sentiment-analyzer",
   "version": "1.0.0",
   "description": "Analyze sentiment from Reddit posts and comments",
   "main": "server/index.js",
@@ -11,7 +11,7 @@
     "install-all": "npm install && cd client && npm install && cd worker && npm install",
     "deploy": "node deploy.js",
     "deploy-worker": "cd worker && wrangler deploy",
-    "deploy-pages": "cd client && npm run build && wrangler pages deploy build --project-name reddit-analyzer"
+    "deploy-pages": "cd client && npm run build && wrangler pages deploy build --project-name bacon-analyzer"
   },
   "dependencies": {
     "express": "^4.18.2",

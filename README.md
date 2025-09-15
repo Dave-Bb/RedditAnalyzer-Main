@@ -1,4 +1,4 @@
-# Reddit Brain AI
+# Bacon Brain AI
 
 A powerful full-stack web application that provides intelligent sentiment analysis for Reddit communities using advanced AI models. Get deep insights into community sentiment, trending topics, and emotional patterns across different subreddits with real-time progress tracking and comprehensive analytics.
 
@@ -194,7 +194,7 @@ The app provides real-time token usage tracking so you can monitor costs during 
 
 2. **"Failed to authenticate with Reddit API"**:
    - Verify Reddit Client ID and Secret in Settings
-   - Ensure User Agent is set (e.g., "RedditBrainAI/1.0")
+   - Ensure User Agent is set (e.g., "BaconBrainAI/1.0")
    - Check Reddit app configuration at reddit.com/prefs/apps
 
 3. **Server connection errors**:
@@ -263,7 +263,7 @@ The app provides real-time token usage tracking so you can monitor costs during 
 ## 📁 Project Structure
 
 ```
-Reddit Brain AI/
+Bacon Brain AI/
 ├── .kiro/                     # Kiro IDE configuration
 │   ├── hooks/                # Automated development workflows
 │   └── specs/                # Feature specifications
