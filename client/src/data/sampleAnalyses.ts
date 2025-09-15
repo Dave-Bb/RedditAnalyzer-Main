@@ -1,6 +1,7 @@
 // Pre-generated sample analyses for static deployment
 // Preserves ALL analysis insights, reduces individual_scores from 18K+ to 50 total
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AnalysisData } from '../types';
 
 export const sampleAnalyses = [
