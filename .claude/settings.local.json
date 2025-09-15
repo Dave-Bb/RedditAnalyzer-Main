@@ -13,7 +13,8 @@
       "Bash(findstr:*)",
       "Bash(timeout:*)",
       "Bash(npm run server:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []
