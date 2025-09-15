@@ -23,7 +23,12 @@ interface TestResult {
   details?: string;
 }
 
-const Settings: React.FC = () => {
+interface SettingsProps {
+  darkMode: boolean;
+  toggleDarkMode: () => void;
+}
+
+const Settings: React.FC<SettingsProps> = ({ darkMode, toggleDarkMode }) => {
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [testResults, setTestResults] = useState<{ [key: string]: TestResult }>({});
@@ -233,6 +238,24 @@ const Settings: React.FC = () => {
           Each analysis processes text through paid AI APIs. Costs vary based on the amount of data analyzed
           (number of posts, comments, and text length). Please monitor your API usage and billing to avoid unexpected charges.
         </p>
+      </div>
+
+      {/* Theme Settings */}
+      <div className="settings-section">
+        <h3>🎨 Theme Settings</h3>
+        <div className="theme-toggle-container">
+          <div className="theme-option">
+            <span className="theme-label">Dark Mode:</span>
+            <button
+              className={`theme-toggle-btn ${darkMode ? 'active' : ''}`}
+              onClick={toggleDarkMode}
+              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              <span className="theme-icon">{darkMode ? '☀️' : '🌙'}</span>
+              <span className="theme-text">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="settings-section">

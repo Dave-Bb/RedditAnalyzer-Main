@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { AnalysisData, SyntheticPostData, SyntheticComment } from '../types';
 
-// Simple hardcoded API URL for now
-const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+// Environment-aware API URL - use local server when available, Cloudflare Worker in production
+const API_URL = process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost'
+  ? 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev'
+  : 'http://localhost:3001';
 
 interface SyntheticPostProps {
   data: AnalysisData;
@@ -201,7 +203,7 @@ const SyntheticPost: React.FC<SyntheticPostProps> = ({ data }) => {
     
     // Generate simple comments
     const vocabulary = extractVocabulary(data.posts || []);
-    const numComments = Math.floor(Math.random() * 5) + 3;
+    const numComments = 10; // Fixed to 10 comments for showcase
     for (let i = 0; i < numComments; i++) {
       post.comments.push(generateComment(vocabulary, sentiment, 0, []));
     }

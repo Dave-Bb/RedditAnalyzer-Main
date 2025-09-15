@@ -111,6 +111,32 @@ const About: React.FC = () => {
             </div>
           </div>
         </section>
+
+        <section className="about-section about-tech">
+          <h3>🔗 Source Code</h3>
+          <p>
+            Reddit Brain AI is open source! You can view the complete source code, contribute to the project,
+            or report issues on GitHub.
+          </p>
+          <div className="github-link-container">
+            <a
+              href="https://github.com/Dave-Bb/RedditAnalyzer-Main"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="github-link"
+            >
+              <span className="github-icon">🔗</span>
+              <div className="github-text">
+                <strong>View on GitHub</strong>
+                <span className="github-desc">Dave-Bb/RedditAnalyzer-Main</span>
+              </div>
+              <span className="external-icon">↗</span>
+            </a>
+          </div>
+          <p className="github-note">
+            Found a bug or have a feature request? Feel free to open an issue or submit a pull request!
+          </p>
+        </section>
       </div>
     </div>
   );

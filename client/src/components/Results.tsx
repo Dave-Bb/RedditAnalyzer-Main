@@ -267,9 +267,13 @@ const Results: React.FC<ResultsProps> = ({
 
       if (response.data.success) {
         // Update the data with the new AI insights
-        data.analysis.ai_insights = response.data.ai_insights;
-        alert('Basic Subreddit Insights regenerated successfully! The page will refresh to show the results.');
-        window.location.reload();
+        const updatedData = { ...data };
+        updatedData.analysis.ai_insights = response.data.ai_insights;
+        alert('Basic Subreddit Insights regenerated successfully!');
+        // Update parent component with new data
+        if (onReanalysisComplete) {
+          onReanalysisComplete(updatedData);
+        }
       } else {
         alert('Failed to regenerate insights: ' + (response.data.error || 'Unknown error'));
       }
@@ -288,6 +292,40 @@ const Results: React.FC<ResultsProps> = ({
         errorMessage += `Error: ${error.message}`;
       }
 
+      alert(errorMessage);
+    } finally {
+      setIsRegeneratingInsights(false);
+    }
+  };
+
+  // Regenerate sentiment only (not full insights)
+  const regenerateSentiment = async () => {
+    setIsRegeneratingInsights(true);
+
+    try {
+      const response = await axios.post(`${API_URL}/api/regenerate-sentiment`, {
+        analysisData: data
+      });
+
+      if (response.data.success) {
+        alert('Sentiment analysis regenerated successfully!');
+        // Update parent component with new data
+        if (onReanalysisComplete) {
+          onReanalysisComplete(response.data.updatedAnalysis);
+        }
+      } else {
+        alert('Failed to regenerate sentiment: ' + (response.data.error || 'Unknown error'));
+      }
+    } catch (error: any) {
+      console.error('Failed to regenerate sentiment:', error);
+      let errorMessage = 'Failed to regenerate sentiment. ';
+      if (error.response?.status === 402) {
+        errorMessage += 'API credits depleted.';
+      } else if (error.response?.data?.error) {
+        errorMessage += error.response.data.error;
+      } else {
+        errorMessage += error.message || 'Unknown error occurred.';
+      }
       alert(errorMessage);
     } finally {
       setIsRegeneratingInsights(false);
@@ -652,6 +690,14 @@ const Results: React.FC<ResultsProps> = ({
                     <h3 className="chart-title">Sentiment Distribution</h3>
                     <p className="chart-subtitle">Overall community mood breakdown</p>
                   </div>
+                  <button
+                    className="retry-button"
+                    onClick={regenerateSentiment}
+                    disabled={isRegeneratingInsights}
+                    title="Regenerate sentiment analysis if values look incorrect"
+                  >
+                    {isRegeneratingInsights ? 'Regenerating...' : 'Fix Sentiment'}
+                  </button>
                 </div>
                 <SentimentChart data={data.analysis} />
               </div>

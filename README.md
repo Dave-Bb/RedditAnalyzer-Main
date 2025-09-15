@@ -331,9 +331,12 @@ Feel free to submit issues and enhancement requests!
 
 ## 📄 License
 
-This project is for educational and personal use. Please respect:
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+**Third-party API Usage:**
+Please respect the terms of service and usage policies for:
 - Reddit's API Terms of Service
-- Anthropic's Claude API Usage Policies  
+- Anthropic's Claude API Usage Policies
 - OpenAI's API Usage Policies
 - Rate limits and fair usage guidelines
 

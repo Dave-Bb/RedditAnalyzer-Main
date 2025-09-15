@@ -70,27 +70,36 @@ class RedditService {
     }
   }
 
-  async fetchPostComments(postId, subreddit, limit = 50) {
+  async fetchPostComments(postId, subreddit, limit = 200) {
     await this.authenticate();
 
+    // Environment-aware limits for Cloudflare Workers
+    const isCloudflareWorker = typeof WorkerGlobalScope !== 'undefined' ||
+                              process.env.CF_WORKER === 'true';
+    const maxMoreRequests = isCloudflareWorker ? 0 : 3; // No 'more' requests in CF Workers, up to 3 for local
+
+    console.log(`🔍 DEBUG: Fetching comments for ${postId} (isCloudflareWorker: ${isCloudflareWorker}, maxMoreRequests: ${maxMoreRequests})`);
+
     try {
+      // First, get the initial comments
       const response = await axios.get(`https://oauth.reddit.com/r/${subreddit}/comments/${postId}`, {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
           'User-Agent': process.env.REDDIT_USER_AGENT
         },
         params: {
-          limit: limit,
+          limit: 100, // Get as many as possible in first request
           raw_json: 1,
           sort: 'top'
         }
       });
 
-      const comments = [];
-      
+      const allComments = [];
+      let moreItems = [];
+
       function extractComments(commentData) {
         if (commentData && commentData.data && commentData.data.body) {
-          comments.push({
+          allComments.push({
             id: commentData.data.id,
             body: commentData.data.body,
             score: commentData.data.score,
@@ -99,10 +108,14 @@ class RedditService {
           });
         }
 
+        // Also extract nested replies
         if (commentData.data && commentData.data.replies && commentData.data.replies.data) {
           commentData.data.replies.data.children.forEach(reply => {
             if (reply.kind === 't1') {
               extractComments(reply);
+            } else if (reply.kind === 'more' && reply.data && reply.data.children && maxMoreRequests > 0) {
+              // Store 'more' items for additional fetching (local only)
+              moreItems.push(...reply.data.children.slice(0, 20)); // Limit to first 20 IDs
             }
           });
         }
@@ -112,11 +125,51 @@ class RedditService {
         response.data[1].data.children.forEach(comment => {
           if (comment.kind === 't1') {
             extractComments(comment);
+          } else if (comment.kind === 'more' && comment.data && comment.data.children && maxMoreRequests > 0) {
+            // Top-level 'more' items - these contain additional comment IDs (local only)
+            moreItems.push(...comment.data.children.slice(0, 50)); // Get first 50 IDs
           }
         });
       }
 
-      return comments;
+      // If we have 'more' items and want more comments, fetch them (local only)
+      if (moreItems.length > 0 && allComments.length < limit && maxMoreRequests > 0) {
+        try {
+          const moreResponse = await axios.post('https://oauth.reddit.com/api/morechildren',
+            `api_type=json&children=${moreItems.slice(0, 100).join(',')}&link_id=t3_${postId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'User-Agent': process.env.REDDIT_USER_AGENT,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              }
+            }
+          );
+
+          if (moreResponse.data && moreResponse.data.json && moreResponse.data.json.data && moreResponse.data.json.data.things) {
+            const moreComments = moreResponse.data.json.data.things
+              .filter(thing => thing.kind === 't1' && thing.data && thing.data.body)
+              .map(thing => ({
+                id: thing.data.id,
+                body: thing.data.body,
+                score: thing.data.score,
+                created_utc: thing.data.created_utc,
+                author: thing.data.author
+              }))
+              .slice(0, limit - allComments.length); // Don't exceed desired limit
+
+            allComments.push(...moreComments);
+          }
+
+          // Small delay to be respectful
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (moreError) {
+          console.warn(`⚠️ Failed to fetch 'more' comments: ${moreError.message}`);
+        }
+      }
+
+      return allComments;
+
     } catch (error) {
       console.error(`Error fetching comments for post ${postId}:`, error.response?.data || error.message);
       return [];
@@ -192,7 +245,7 @@ class RedditService {
 
       const batchPromises = batch.map(async (post) => {
         try {
-          post.comments = await this.fetchPostComments(post.id, post.subreddit, 50); // Increased from 25 to 50
+          post.comments = await this.fetchPostComments(post.id, post.subreddit, 200); // Fetch up to 200 comments per post
           return post;
         } catch (error) {
           console.error(`Error fetching comments for post ${post.id}:`, error.message);

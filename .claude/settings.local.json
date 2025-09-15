@@ -8,7 +8,12 @@
       "Bash(npm run build:*)",
       "Bash(PORT=3001 npm start)",
       "Bash(PORT=3000 npm start)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(timeout:*)",
+      "Bash(npm run server:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

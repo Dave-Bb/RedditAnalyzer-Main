@@ -515,7 +515,7 @@ app.post('/api/generate-synthetic-post', async (req, res) => {
     console.log('🤖 Generating synthetic post for subreddit:', data.subreddit);
     
     // Create the prompt exactly like you did manually
-    const prompt = `Based on this Reddit data from r/${data.subreddit}, create a realistic synthetic post with 3-4 comments that captures the community's discussion style, terminology, and engagement patterns.
+    const prompt = `Based on this Reddit data from r/${data.subreddit}, create a realistic synthetic post with 10 comments that captures the community's discussion style, terminology, and engagement patterns.
 
 Sample posts and comments:
 ${JSON.stringify(data.sample_posts, null, 2)}
@@ -561,6 +561,139 @@ Make it feel authentic to this specific community - use their terminology, discu
 });
 
 // Regenerate claude insights endpoint (for retry functionality)
+// Regenerate just sentiment analysis (not full insights)
+app.post('/api/regenerate-sentiment', async (req, res) => {
+  try {
+    const { analysisData } = req.body;
+
+    console.log('🔄 Regenerating sentiment analysis only...');
+
+    // Extract all text content from the existing analysis
+    const allTexts = [];
+
+    // Add post titles and content
+    if (analysisData.posts) {
+      analysisData.posts.forEach(post => {
+        if (post.title) allTexts.push(post.title);
+        if (post.selftext) allTexts.push(post.selftext);
+      });
+    }
+
+    // Add all comments
+    if (analysisData.posts) {
+      analysisData.posts.forEach(post => {
+        if (post.comments) {
+          post.comments.forEach(comment => {
+            if (comment.body && comment.body.length > 20) {
+              allTexts.push(comment.body.substring(0, 600));
+            }
+          });
+        }
+      });
+    }
+
+    console.log(`🔍 Recalculating sentiment for ${allTexts.length} texts`);
+
+    // Generate sentiment data locally from existing saved comments/posts
+    console.log(`🔍 Generating local sentiment analysis from ${allTexts.length} existing texts`);
+
+    // Simple local sentiment analysis using keyword matching
+    const positiveWords = ['good', 'great', 'excellent', 'amazing', 'awesome', 'fantastic', 'wonderful', 'love', 'like', 'best', 'perfect', 'happy', 'glad', 'thanks', 'thank', 'appreciate', 'brilliant', 'outstanding', 'superb', 'impressive', 'incredible', 'remarkable'];
+    const negativeWords = ['bad', 'terrible', 'awful', 'horrible', 'hate', 'worst', 'sucks', 'disappointing', 'frustrated', 'angry', 'annoyed', 'stupid', 'dumb', 'ridiculous', 'pathetic', 'useless', 'garbage', 'trash', 'disgusting', 'outrageous'];
+
+    let positiveCount = 0;
+    let negativeCount = 0;
+    let neutralCount = 0;
+    const wordFrequency = {};
+
+    // Process each text for sentiment and word frequency
+    allTexts.forEach(text => {
+      const lowerText = text.toLowerCase();
+      const words = lowerText.match(/\b\w+\b/g) || [];
+
+      // Count word frequency for word cloud
+      words.forEach(word => {
+        if (word.length > 3) { // Only count longer words
+          wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+        }
+      });
+
+      // Simple sentiment scoring
+      const positiveMatches = positiveWords.filter(word => lowerText.includes(word)).length;
+      const negativeMatches = negativeWords.filter(word => lowerText.includes(word)).length;
+
+      if (positiveMatches > negativeMatches) {
+        positiveCount++;
+      } else if (negativeMatches > positiveMatches) {
+        negativeCount++;
+      } else {
+        neutralCount++;
+      }
+    });
+
+    // Calculate percentages
+    const total = allTexts.length;
+    const sentimentDistribution = {
+      positive: Math.round((positiveCount / total) * 100),
+      neutral: Math.round((neutralCount / total) * 100),
+      negative: Math.round((negativeCount / total) * 100)
+    };
+
+    // Get top themes/words for word cloud
+    const sortedWords = Object.entries(wordFrequency)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 20)
+      .map(([word, count]) => ({ text: word, value: count }));
+
+    // Create the result structure
+    const sentimentResult = {
+      overall_analysis: {
+        average_score: ((positiveCount * 1 + negativeCount * -1) / total).toFixed(2),
+        sentiment_distribution: sentimentDistribution,
+        dominant_themes: sortedWords.slice(0, 10).map(item => item.text),
+        key_emotions: ['analytical', 'discussion', 'commentary'] // Generic emotions
+      }
+    };
+
+    console.log('📊 Local sentiment analysis completed:', {
+      totalTexts: total,
+      distribution: sentimentDistribution,
+      topWords: sortedWords.slice(0, 5).map(w => w.text)
+    });
+
+    // Update just the sentiment parts of the analysis
+    if (analysisData.summary && sentimentResult.overall_analysis) {
+      analysisData.summary.averageSentiment = sentimentResult.overall_analysis.average_score;
+      analysisData.summary.sentimentDistribution = sentimentResult.overall_analysis.sentiment_distribution;
+
+      // Update themes if available
+      if (sentimentResult.overall_analysis.dominant_themes) {
+        analysisData.summary.topThemes = sentimentResult.overall_analysis.dominant_themes;
+      }
+
+      // Update emotions if available
+      if (sentimentResult.overall_analysis.key_emotions) {
+        analysisData.summary.keyEmotions = sentimentResult.overall_analysis.key_emotions;
+      }
+    }
+
+    console.log('✅ Sentiment recalculated successfully');
+
+    res.json({
+      success: true,
+      updatedAnalysis: analysisData,
+      message: 'Sentiment analysis regenerated successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to regenerate sentiment:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 app.post('/api/regenerate-claude-insights', async (req, res) => {
   try {
     const { analysisData } = req.body;

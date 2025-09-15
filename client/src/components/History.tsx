@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { AnalysisData } from '../types';
+import { sampleAnalyses } from '../data/sampleAnalyses';
 
-// Simple hardcoded API URL for now
-const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+// Generated analysis file names (will be loaded dynamically)
+// Temporarily empty to prevent build errors - will be populated by batch script
+const generatedFiles: string[] = [
+  // Files will be added here by the batch analysis generator
+];
+
+// Auto-detect API URL based on environment
+const API_URL = process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost'
+  ? 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev'
+  : 'http://localhost:3001';
 
 interface SavedAnalysis {
   id: string;
@@ -23,6 +32,7 @@ interface SavedAnalysis {
     dominantSentiment: string;
     topThemes: string[];
   };
+  isSample?: boolean;
 }
 
 interface HistoryProps {
@@ -58,10 +68,46 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
 
   const loadAnalyses = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/analyses`);
-      if (response.data.success) {
-        setAnalyses(response.data.analyses);
+      // Load sample analyses (always available)
+      const samples = sampleAnalyses.map(sample => ({
+        id: sample.id,
+        timestamp: sample.generated_at,
+        name: sample.name,
+        description: sample.description,
+        tags: ['sample', 'comprehensive', ...sample.subreddits],
+        subreddits: sample.subreddits,
+        dateRange: sample.dateRange,
+        isSample: true, // Mark all built-in samples as non-deletable
+        summary: {
+          totalPosts: sample.totalPosts,
+          totalComments: sample.totalComments,
+          overallSentiment: sample.data.analysis.overall_sentiment.average_score,
+          dominantSentiment: sample.data.analysis.overall_sentiment.average_score > 0.1 ? 'positive' :
+                            sample.data.analysis.overall_sentiment.average_score < -0.1 ? 'negative' : 'neutral',
+          topThemes: sample.data.analysis.overall_sentiment.dominant_themes || []
+        }
+      }));
+
+      // Try to load API analyses (may not be available)
+      let apiAnalyses: SavedAnalysis[] = [];
+      try {
+        const response = await axios.get(`${API_URL}/api/analyses`);
+        if (response.data.success) {
+          apiAnalyses = response.data.analyses;
+        }
+      } catch (error) {
+        console.log('API analyses not available:', error instanceof Error ? error.message : String(error));
       }
+
+      // Load generated batch analyses dynamically (when files exist)
+      const generated: any[] = [];
+      // Skip loading when generatedFiles is empty to prevent build errors
+      // TODO: Add files to generatedFiles array after batch generation completes
+
+      // If API analyses are available (our updated ones with proper titles and isSample), use them
+      // Otherwise, fall back to built-in samples
+      const finalAnalyses = apiAnalyses.length > 0 ? apiAnalyses : samples;
+      setAnalyses([...finalAnalyses, ...generated]);
     } catch (error) {
       console.error('Failed to load analyses:', error);
     } finally {
@@ -72,6 +118,32 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
   const loadAnalysis = async (id: string) => {
     setLoadingId(id);
     try {
+      // First check if it's a sample analysis
+      const sampleAnalysis = sampleAnalyses.find(sample => sample.id === id);
+      if (sampleAnalysis) {
+        onLoadAnalysis(sampleAnalysis.data);
+        setLoadingId(null);
+        return;
+      }
+
+      // Check if it's a generated analysis (skip when no generated files exist)
+      if (generatedFiles.length > 0) {
+        for (const fileName of generatedFiles) {
+          if (fileName === id) {
+            try {
+              const response = await import(`../data/generated/${fileName}.json`);
+              const analysis = response.default || response;
+              onLoadAnalysis(analysis.data);
+              setLoadingId(null);
+              return;
+            } catch (error) {
+              break; // File doesn't exist, continue to API call
+            }
+          }
+        }
+      }
+
+      // If not found in samples or generated, try API
       const response = await axios.get(`${API_URL}/api/analyses/${id}`);
       if (response.data.success) {
         onLoadAnalysis(response.data.analysis.data);
@@ -85,6 +157,14 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
   };
 
   const deleteAnalysis = async (id: string, name: string) => {
+    // Check if it's a sample analysis (can't be deleted)
+    const isSampleAnalysis = sampleAnalyses.some(sample => sample.id === id) ||
+                             analyses.find(a => a.id === id)?.isSample;
+    if (isSampleAnalysis) {
+      alert('Sample analyses cannot be deleted. They are provided as examples to showcase the analysis capabilities.');
+      return;
+    }
+
     if (!window.confirm(`Are you sure you want to delete "${name}"?`)) {
       return;
     }
@@ -308,7 +388,12 @@ const History: React.FC<HistoryProps> = ({ onLoadAnalysis }) => {
                     <button
                       onClick={() => deleteAnalysis(analysis.id, analysis.name)}
                       className="delete-btn"
-                      title="Delete analysis"
+                      title={analysis.isSample ? "Sample analyses cannot be deleted" : "Delete analysis"}
+                      style={{
+                        opacity: analysis.isSample ? 0.3 : 1,
+                        cursor: analysis.isSample ? 'not-allowed' : 'pointer'
+                      }}
+                      disabled={analysis.isSample}
                     >
                       🗑️
                     </button>

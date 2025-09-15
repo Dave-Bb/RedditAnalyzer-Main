@@ -5,6 +5,7 @@ import Results from './components/Results';
 import Settings from './components/Settings';
 import History from './components/History';
 import About from './components/About';
+import Privacy from './components/Privacy';
 import { AnalysisData } from './types';
 import { API_ENDPOINTS } from './config';
 import axios from 'axios';
@@ -15,7 +16,7 @@ import { API_BASE_URL } from './config';
 const API_URL = API_BASE_URL;
 
 function App() {
-  const [currentView, setCurrentView] = useState<'analysis' | 'settings' | 'history' | 'about'>('analysis');
+  const [currentView, setCurrentView] = useState<'analysis' | 'settings' | 'history' | 'about' | 'privacy'>('analysis');
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,12 +308,11 @@ function App() {
             >
               About
             </button>
-            <button 
-              className="nav-btn theme-toggle"
-              onClick={toggleDarkMode}
-              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            <button
+              className={currentView === 'privacy' ? 'nav-btn active' : 'nav-btn'}
+              onClick={() => setCurrentView('privacy')}
             >
-              {darkMode ? '☀️' : '🌙'}
+              Privacy
             </button>
           </nav>
         </div>
@@ -320,11 +320,13 @@ function App() {
 
       <main className="main-content">
         {currentView === 'settings' ? (
-          <Settings />
+          <Settings darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
         ) : currentView === 'history' ? (
           <History onLoadAnalysis={handleAnalysisComplete} />
         ) : currentView === 'about' ? (
           <About />
+        ) : currentView === 'privacy' ? (
+          <Privacy />
         ) : (
           <div className="dashboard-layout">
             {!analysisData && !isLoading ? (
@@ -339,6 +341,67 @@ function App() {
                   </div>
                   <h2>Welcome to Reddit Brain AI</h2>
                   <p>Start your analysis journey by clicking "New Analysis" to configure and run sentiment analysis on Reddit communities.</p>
+
+                  {/* Sample Analysis Notification */}
+                  <div
+                    className="sample-notification"
+                    style={{
+                      position: 'fixed',
+                      top: '100px',
+                      right: '30px',
+                      zIndex: 9999,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      animation: 'fadeInSlide 1s ease-in-out'
+                    }}
+                  >
+                    <div
+                      className="notification-content"
+                      onClick={() => setCurrentView('history')}
+                      style={{
+                        cursor: 'pointer',
+                        pointerEvents: 'all',
+                        background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                        color: 'white',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '14px',
+                        maxWidth: '250px',
+                        border: '1px solid rgba(255, 255, 255, 0.2)'
+                      }}
+                      title="Click to view sample analyses"
+                    >
+                      <span className="notification-icon" style={{ fontSize: '16px' }}>💡</span>
+                      <div className="notification-text">
+                        <strong>New here?</strong> Check out our sample analyses first!
+                      </div>
+                    </div>
+                    <div className="arrow-pointer" style={{ display: 'flex', alignItems: 'center' }}>
+                      <div
+                        className="arrow-line"
+                        style={{
+                          width: '40px',
+                          height: '2px',
+                          background: 'linear-gradient(90deg, #4CAF50, transparent)',
+                          animation: 'arrowMove 2s ease-in-out infinite'
+                        }}
+                      ></div>
+                      <div
+                        className="arrow-head"
+                        style={{
+                          fontSize: '18px',
+                          marginLeft: '-5px',
+                          animation: 'bounce 2s infinite'
+                        }}
+                      >📚</div>
+                    </div>
+                  </div>
+
                   <button
                     className="cta-button"
                     onClick={() => setShowConfigModal(true)}
@@ -430,7 +493,7 @@ function App() {
                 </button>
               </div>
               <div className="modal-body">
-                {!isLoading && !analysisData ? (
+                {!isLoading ? (
                   <AnalysisForm
                     onAnalysisComplete={(data) => {
                       handleAnalysisComplete(data);

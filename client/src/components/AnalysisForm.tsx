@@ -2,8 +2,10 @@ import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { AnalysisData } from '../types';
 
-// Simple hardcoded API URL for now
-const API_URL = 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev';
+// Auto-detect API URL based on environment
+const API_URL = process.env.NODE_ENV === 'production' || window.location.hostname !== 'localhost'
+  ? 'https://reddit-analyzer-api.fridayfeelingdev.workers.dev'
+  : 'http://localhost:3001';
 
 interface AnalysisFormProps {
   onAnalysisComplete: (data: AnalysisData) => void;

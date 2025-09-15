@@ -205,7 +205,8 @@ class RedditService {
 
   async fetchPostComments(subreddit, postId, accessToken) {
     try {
-      const url = `https://oauth.reddit.com/r/${subreddit}/comments/${postId}?limit=10`;
+      // Higher limit for Cloudflare Workers but no 'more' requests due to subrequest limits
+      const url = `https://oauth.reddit.com/r/${subreddit}/comments/${postId}?limit=100&sort=top&raw_json=1`;
 
       const response = await fetch(url, {
         headers: {
@@ -219,21 +220,38 @@ class RedditService {
       const data = await response.json();
       const comments = [];
 
-      if (data[1] && data[1].data && data[1].data.children) {
-        for (const comment of data[1].data.children) {
-          if (comment.kind === 't1' && comment.data.body !== '[deleted]') {
-            comments.push({
-              id: comment.data.id,
-              author: comment.data.author,
-              body: comment.data.body,
-              score: comment.data.score,
-              created_utc: comment.data.created_utc, // Keep as timestamp like posts
-            });
-          }
+      // Extract comments with nested replies (recursively)
+      function extractComments(commentData) {
+        if (commentData && commentData.data && commentData.data.body && commentData.data.body !== '[deleted]') {
+          comments.push({
+            id: commentData.data.id,
+            author: commentData.data.author,
+            body: commentData.data.body,
+            score: commentData.data.score,
+            created_utc: commentData.data.created_utc,
+          });
+        }
+
+        // Extract nested replies
+        if (commentData.data && commentData.data.replies && commentData.data.replies.data) {
+          commentData.data.replies.data.children.forEach(reply => {
+            if (reply.kind === 't1') {
+              extractComments(reply);
+            }
+          });
         }
       }
 
-      console.log(`🔥 Returning ${comments.length} comments for post ${postId}`);
+      if (data[1] && data[1].data && data[1].data.children) {
+        for (const comment of data[1].data.children) {
+          if (comment.kind === 't1') {
+            extractComments(comment);
+          }
+          // Note: We skip 'more' items in Cloudflare Workers to avoid subrequest limits
+        }
+      }
+
+      console.log(`🔥 Worker returning ${comments.length} comments for post ${postId}`);
       return comments;
     } catch (error) {
       console.error(`Error fetching comments for ${postId}:`, error);
