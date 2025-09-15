@@ -1,5 +1,7 @@
 # Bacon Brain AI
 
+**🌐 Live Demo: [http://baconbrain.net/](http://baconbrain.net/)**
+
 A powerful full-stack web application that provides intelligent sentiment analysis for Reddit communities using advanced AI models. Get deep insights into community sentiment, trending topics, and emotional patterns across different subreddits with real-time progress tracking and comprehensive analytics.
 
 ## ✨ Key Features

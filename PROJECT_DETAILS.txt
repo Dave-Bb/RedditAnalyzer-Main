@@ -1,0 +1,67 @@
+PROJECT STORY
+=============
+
+## About the Project
+
+**What inspired me:**
+Reddit is one of the largest discussion platforms on the internet, with millions of users sharing opinions on every topic imaginable. However, manually reading through hundreds or thousands of comments to gauge public sentiment is impossible. I wanted to create a tool that could harness AI to quickly analyze what Reddit communities really think about any subject.
+
+**What I learned:**
+- How to work with Reddit's OAuth API and handle rate limiting
+- Implementing batch processing for AI APIs to optimize performance and cost
+- Building efficient data pipelines that can process thousands of posts simultaneously
+- Managing concurrent API requests while respecting rate limits
+- The challenges of sentiment analysis at scale
+
+**How I built it:**
+I used **Kiro** (AI-powered development tool) to generate comprehensive project specifications, requirements documentation, and system architecture design. This provided a solid foundation with detailed acceptance criteria and technical specifications.
+
+The project uses a React TypeScript frontend connected to a Node.js Express backend. The backend authenticates with Reddit's API to fetch posts and comments from specified subreddits, then sends batches of text to Claude AI or OpenAI for sentiment analysis. The system processes up to 100 texts per API call for efficiency, aggregates the results, and presents visualizations showing sentiment trends over time.
+
+**Challenges I faced:**
+- **Performance optimization:** Initial version made individual API calls for each post, which was extremely slow. Implemented batch processing to analyze 100+ posts per request.
+- **Reddit API limitations:** Had to implement proper OAuth flow and respect rate limits while still fetching large amounts of data quickly.
+- **Cost management:** AI API calls can be expensive, so I optimized batch sizes and implemented smart text truncation.
+- **Data visualization:** Creating meaningful charts that show sentiment trends across different subreddits and time periods.
+
+BUILT WITH
+==========
+
+TypeScript JavaScript React Node.js Express Reddit-API Claude-API OpenAI-API Recharts Cloudflare-Workers Cloudflare-Pages Kiro
+
+**Languages:**
+- TypeScript
+- JavaScript
+- HTML/CSS
+
+**Frontend:**
+- React 18
+- Recharts (data visualization)
+- Axios (HTTP client)
+- Create React App
+
+**Backend:**
+- Node.js
+- Express.js
+- Reddit OAuth API
+- Local JSON storage
+
+**AI/ML APIs:**
+- Claude API (Anthropic)
+- OpenAI API
+
+**Development Tools:**
+- Nodemon
+- Concurrently
+- npm/Node.js package management
+
+**Cloud/Deployment:**
+- Cloudflare Workers (worker service)
+- Cloudflare Pages (frontend deployment)
+
+TRY IT OUT LINKS
+===============
+
+- **Live Demo:** [Add your deployed URL here]
+- **GitHub Repository:** [Add your GitHub repo URL here]
+- **API Documentation:** Available at `/api/health` endpoint when running locally
